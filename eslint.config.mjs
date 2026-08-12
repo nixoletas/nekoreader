@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Assets do pdf.js copiados em prebuild — não são nosso código.
+    "public/**",
   ]),
 ]);
 
