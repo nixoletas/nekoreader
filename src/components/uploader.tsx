@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { inspecionarPdf } from "@/lib/pdf";
+import { Aviso } from "@/components/ui";
 
 export default function Uploader() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function Uploader() {
       (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
     );
     if (!lista.length) {
-      setError("Selecione um arquivo PDF.");
+      setError("Só aceito arquivo PDF por enquanto.");
       return;
     }
 
@@ -27,20 +28,20 @@ export default function Uploader() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Sessão expirada. Faça login de novo.");
+      setError("Sessão expirada. Entre de novo.");
       return;
     }
 
     for (const [i, file] of lista.entries()) {
       const rotulo = lista.length > 1 ? `(${i + 1}/${lista.length}) ` : "";
       try {
-        setStatus(`${rotulo}Lendo ${file.name}...`);
+        setStatus(`${rotulo}Lendo ${file.name}`);
         const { totalPages, cover } = await inspecionarPdf(file);
 
         const id = crypto.randomUUID();
         const pdfPath = `${user.id}/${id}.pdf`;
 
-        setStatus(`${rotulo}Enviando ${file.name}...`);
+        setStatus(`${rotulo}Guardando na estante`);
         const up = await supabase.storage
           .from("books")
           .upload(pdfPath, file, { contentType: "application/pdf" });
@@ -70,7 +71,7 @@ export default function Uploader() {
           throw ins.error;
         }
       } catch (e) {
-        setError(`Falha em ${file.name}: ${(e as Error).message}`);
+        setError(`Falhou em ${file.name}: ${(e as Error).message}`);
         setStatus(null);
         return;
       }
@@ -82,44 +83,55 @@ export default function Uploader() {
   }
 
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragging(false);
-        void enviar(e.dataTransfer.files);
-      }}
-      className={`rounded-2xl border-2 border-dashed p-6 text-center transition ${
-        dragging ? "border-accent bg-accent/5" : "border-border bg-surface"
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf"
-        multiple
-        hidden
-        onChange={(e) => e.target.files && void enviar(e.target.files)}
-      />
-      <p className="text-sm text-muted">
-        Arraste PDFs aqui ou{" "}
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="font-semibold text-accent underline-offset-2 hover:underline"
-          disabled={!!status}
-        >
-          escolha do computador
-        </button>
-      </p>
-      {status && <p className="mt-2 text-sm font-medium">{status}</p>}
-      {error && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
+    <div className="space-y-3">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void enviar(e.dataTransfer.files);
+        }}
+        onClick={() => !status && inputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+        className={`group cursor-pointer rounded-3xl border-2 border-dashed px-5 py-7 text-center transition ${
+          dragging
+            ? "border-accent bg-accent/8"
+            : "border-border bg-surface hover:border-accent/50"
+        } ${status ? "pointer-events-none opacity-70" : ""}`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf"
+          multiple
+          hidden
+          onChange={(e) => e.target.files && void enviar(e.target.files)}
+        />
+
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-2xl transition group-hover:scale-105">
+          {status ? "⏳" : "＋"}
+        </div>
+
+        {status ? (
+          <p className="text-[15px] font-medium">{status}…</p>
+        ) : (
+          <>
+            <p className="display text-lg">Adicionar livro</p>
+            <p className="mt-0.5 text-sm text-muted">
+              <span className="hidden sm:inline">Arraste um PDF aqui ou </span>
+              toque para escolher
+            </p>
+          </>
+        )}
+      </div>
+
+      {error && <Aviso tipo="erro">{error}</Aviso>}
     </div>
   );
 }

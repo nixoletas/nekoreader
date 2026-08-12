@@ -2,66 +2,159 @@
 @import "react-pdf/dist/Page/TextLayer.css";
 @import "react-pdf/dist/Page/AnnotationLayer.css";
 
+/* ============================================================
+   Paleta: papel, tinta e um vermelho de lombada antiga.
+   ============================================================ */
+
 :root {
-  --background: #f8fafc;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --accent: #4f46e5;
+  --paper: #f4eee2;
+  --surface: #fffdf7;
+  --line: #e0d5c0;
+  --ink: #211c16;
+  --ink-soft: #726755;
+  --accent: #a33f27;
+  --accent-soft: #c8734f;
+  --gold: #b78a34;
+  --grain: rgba(33, 28, 22, 0.035);
+  --shadow: 0 1px 2px rgba(60, 45, 25, 0.06), 0 8px 24px -12px rgba(60, 45, 25, 0.28);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b1120;
-    --surface: #111827;
-    --border: #1f2937;
-    --foreground: #e5e7eb;
-    --muted: #94a3b8;
-    --accent: #818cf8;
+    --paper: #15120e;
+    --surface: #1e1a15;
+    --line: #322a21;
+    --ink: #ece2d0;
+    --ink-soft: #9d9285;
+    --accent: #e08a63;
+    --accent-soft: #c8734f;
+    --gold: #d8ab4e;
+    --grain: rgba(255, 250, 240, 0.028);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px -14px rgba(0, 0, 0, 0.8);
   }
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-background: var(--paper);
   --color-surface: var(--surface);
-  --color-border: var(--border);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
+  --color-border: var(--line);
+  --color-foreground: var(--ink);
+  --color-muted: var(--ink-soft);
   --color-accent: var(--accent);
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  --color-gold: var(--gold);
+  --font-display: var(--font-display), Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
 }
 
-/* --- camada de texto do pdf.js: seleção precisa --- */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  color: var(--ink);
+  background-color: var(--paper);
+  /* grão de papel */
+  background-image: radial-gradient(var(--grain) 1px, transparent 1px);
+  background-size: 3px 3px;
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ---------- tipografia ---------- */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.rule {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--line) 15%,
+    var(--line) 85%,
+    transparent
+  );
+}
+
+/* ---------- alvos de toque ---------- */
+
+.tap {
+  min-height: 48px;
+  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.safe-b {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* ---------- camada de texto do pdf.js ---------- */
+
 .textLayer {
   opacity: 1;
 }
 .textLayer span::selection {
-  background: rgba(79, 70, 229, 0.35);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* --- marcações --- */
+/* ---------- marcações: véu translúcido, texto sempre legível ---------- */
+/* Sem z-index no contêiner: o multiply precisa enxergar o canvas atrás. */
+
+.hl-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .hl-rect {
   position: absolute;
-  mix-blend-mode: multiply;
   border-radius: 2px;
-  pointer-events: auto;
-  cursor: pointer;
-  transition: filter 0.12s ease;
-}
-.hl-rect:hover {
-  filter: brightness(0.92);
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  .hl-rect {
-    mix-blend-mode: screen;
-    opacity: 0.45;
+.hl-rect[data-ativa="true"] {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- animações discretas ---------- */
+
+@keyframes sobe {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sobe {
+  animation: sobe 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sobe {
+    animation: none;
   }
 }

@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "@/lib/pdf";
-import { HIGHLIGHT_COLORS, type HighlightColor, type Highlight, type Rect } from "@/lib/types";
+import {
+  HIGHLIGHT_LABEL,
+  fill,
+  swatch,
+  type Highlight,
+  type HighlightColor,
+  type Rect,
+} from "@/lib/types";
 
 type Pending = { rects: Rect[]; text: string };
 
@@ -13,6 +20,8 @@ const PDFJS_OPTIONS = {
   standardFontDataUrl: "/pdfjs/standard_fonts/",
 };
 
+const CORES: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
 export default function PdfCanvas({
   fileUrl,
   pageNumber,
@@ -21,6 +30,7 @@ export default function PdfCanvas({
   onLoadSuccess,
   onAddHighlight,
   onDeleteHighlight,
+  onSwipe,
 }: {
   fileUrl: string;
   pageNumber: number;
@@ -33,9 +43,11 @@ export default function PdfCanvas({
     color: HighlightColor,
   ) => Promise<void>;
   onDeleteHighlight: (id: string) => Promise<void>;
+  onSwipe: (dir: 1 | -1) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const toque = useRef<{ x: number; y: number; t: number } | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Highlight | null>(null);
@@ -54,7 +66,7 @@ export default function PdfCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // Troca de página fecha popovers (ajuste de estado durante o render).
+  // Troca de página fecha os popovers (ajuste de estado durante o render).
   const [paginaAnterior, setPaginaAnterior] = useState(pageNumber);
   if (paginaAnterior !== pageNumber) {
     setPaginaAnterior(pageNumber);
@@ -63,19 +75,21 @@ export default function PdfCanvas({
   }
 
   const largura = containerWidth
-    ? Math.max(280, Math.round(containerWidth * zoom))
+    ? Math.max(240, Math.round(containerWidth * zoom))
     : undefined;
 
   const handlePointerUp = useCallback(() => {
     const pageEl = pageRef.current;
     if (!pageEl) return;
     const sel = window.getSelection();
-    const base = pageEl.getBoundingClientRect();
 
     if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
       if (pageEl.contains(range.commonAncestorContainer)) {
-        const rects = normalizar(Array.from(range.getClientRects()), base);
+        const rects = normalizar(
+          Array.from(range.getClientRects()),
+          pageEl.getBoundingClientRect(),
+        );
         if (rects.length) {
           setAtiva(null);
           setPending({ rects, text: sel.toString().replace(/\s+/g, " ").trim() });
@@ -107,6 +121,27 @@ export default function PdfCanvas({
     [highlights],
   );
 
+  // Deslizar o dedo troca de página (só quando não há seleção ativa).
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    toque.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    const ini = toque.current;
+    toque.current = null;
+    if (!ini || pending) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+
+    const t = e.changedTouches[0];
+    const dx = t.clientX - ini.x;
+    const dy = t.clientY - ini.y;
+    if (Date.now() - ini.t > 700) return;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
+    onSwipe(dx < 0 ? 1 : -1);
+  }
+
   async function salvar(color: HighlightColor) {
     if (!pending) return;
     await onAddHighlight(pending.rects, pending.text, color);
@@ -124,14 +159,10 @@ export default function PdfCanvas({
           onLoadSuccess(doc.numPages);
         }}
         onLoadError={(e) => setErro(e.message)}
-        loading={
-          <div className="py-24 text-center text-sm text-muted">
-            Carregando PDF...
-          </div>
-        }
+        loading={<Esqueleto texto="Abrindo o livro" />}
         error={
           <div className="py-24 text-center text-sm text-red-500">
-            {erro ?? "Falha ao carregar o PDF."}
+            {erro ?? "Não consegui abrir esse PDF."}
           </div>
         }
         className="flex justify-center"
@@ -140,74 +171,73 @@ export default function PdfCanvas({
           ref={pageRef}
           onPointerUp={handlePointerUp}
           onClick={handleClick}
-          className="relative inline-block bg-white shadow-lg"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          className="relative inline-block overflow-hidden rounded-lg bg-white shadow-[0_2px_6px_rgba(60,45,25,0.12),0_20px_50px_-24px_rgba(60,45,25,0.5)]"
         >
           <Page
             pageNumber={pageNumber}
             width={largura}
             renderTextLayer
             renderAnnotationLayer={false}
-            loading={
-              <div className="py-24 text-center text-sm text-muted">...</div>
-            }
+            loading={<Esqueleto texto="" />}
           />
 
-          {/* marcações salvas */}
-          <div className="pointer-events-none absolute inset-0 z-[2]">
+          {/* véu das marcações — sem z-index, senão o multiply não enxerga a página */}
+          <div className="hl-layer">
             {highlights.map((h) =>
               h.rects.map((r, i) => (
                 <span
                   key={`${h.id}-${i}`}
                   className="hl-rect"
+                  data-ativa={ativa?.id === h.id}
                   style={{
                     left: `${r.x * 100}%`,
                     top: `${r.y * 100}%`,
                     width: `${r.w * 100}%`,
                     height: `${r.h * 100}%`,
-                    background: HIGHLIGHT_COLORS[h.color] ?? HIGHLIGHT_COLORS.yellow,
-                    outline:
-                      ativa?.id === h.id ? "2px solid var(--accent)" : "none",
+                    background: fill(h.color),
                   }}
                 />
               )),
             )}
           </div>
 
-          {/* seleção nova: escolher cor */}
           {pending && (
-            <Popover rect={pending.rects[0]}>
-              {(Object.keys(HIGHLIGHT_COLORS) as HighlightColor[]).map((c) => (
+            <Popover rects={pending.rects}>
+              {CORES.map((c) => (
                 <button
                   key={c}
                   onClick={() => void salvar(c)}
-                  title={`Marcar em ${c}`}
-                  className="h-6 w-6 rounded-full border border-black/15 transition hover:scale-110"
-                  style={{ background: HIGHLIGHT_COLORS[c] }}
+                  aria-label={`Marcar em ${HIGHLIGHT_LABEL[c].toLowerCase()}`}
+                  className="h-10 w-10 rounded-full border-2 border-white/25 transition active:scale-90"
+                  style={{ background: swatch(c) }}
                 />
               ))}
+              <span className="mx-0.5 h-7 w-px bg-white/20" />
               <button
                 onClick={() => {
                   setPending(null);
                   window.getSelection()?.removeAllRanges();
                 }}
-                className="px-1 text-xs text-white/70 hover:text-white"
+                aria-label="Cancelar"
+                className="h-10 w-10 rounded-full text-lg text-white/70 transition active:scale-90"
               >
                 ✕
               </button>
             </Popover>
           )}
 
-          {/* marcação existente: excluir */}
           {ativa && !pending && (
-            <Popover rect={ativa.rects[0]}>
+            <Popover rects={ativa.rects}>
               <button
                 onClick={async () => {
                   await onDeleteHighlight(ativa.id);
                   setAtiva(null);
                 }}
-                className="px-2 text-xs font-medium text-white hover:text-red-300"
+                className="tap !min-h-10 rounded-lg px-3 text-sm font-medium text-white"
               >
-                Excluir marcação
+                🗑 Apagar marcação
               </button>
             </Popover>
           )}
@@ -217,29 +247,48 @@ export default function PdfCanvas({
   );
 }
 
+function Esqueleto({ texto }: { texto: string }) {
+  return (
+    <div className="flex aspect-[1/1.4] w-full max-w-3xl animate-pulse flex-col items-center justify-center rounded-lg bg-surface">
+      <span className="text-sm text-muted">{texto}</span>
+    </div>
+  );
+}
+
 function Popover({
-  rect,
+  rects,
   children,
 }: {
-  rect: Rect;
+  rects: Rect[];
   children: React.ReactNode;
 }) {
+  const r = rects[0];
+  const centro = (r.x + r.w / 2) * 100;
+  // Ancora acima da seleção; se estiver no topo da página, joga pra baixo.
+  const acima = r.y > 0.14;
+
   return (
     <div
-      className="absolute z-10 flex -translate-y-full items-center gap-1.5 rounded-lg bg-slate-900 px-2 py-1.5 shadow-xl"
+      className="sobe absolute z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl bg-[#26201a] px-2 py-1.5 shadow-xl ring-1 ring-white/10"
       style={{
-        left: `${rect.x * 100}%`,
-        top: `calc(${rect.y * 100}% - 6px)`,
+        left: `clamp(7.5rem, ${centro}%, calc(100% - 7.5rem))`,
+        top: acima
+          ? `calc(${r.y * 100}% - 0.6rem)`
+          : `calc(${(r.y + r.h) * 100}% + 0.6rem)`,
+        transform: acima
+          ? "translate(-50%, -100%)"
+          : "translate(-50%, 0)",
       }}
       onPointerUp={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
     >
       {children}
     </div>
   );
 }
 
-/** Converte DOMRects para frações da página e remove sobras/duplicatas. */
+/** DOMRects → frações da página, sem duplicatas nem sobras. */
 function normalizar(rects: DOMRect[], base: DOMRect): Rect[] {
   const uteis = rects
     .filter((r) => r.width > 1 && r.height > 1)
@@ -251,7 +300,6 @@ function normalizar(rects: DOMRect[], base: DOMRect): Rect[] {
     }))
     .filter((r) => r.x < 1 && r.y < 1 && r.x + r.w > 0 && r.y + r.h > 0);
 
-  // descarta retângulos contidos em outros
   return uteis.filter(
     (r, i) =>
       !uteis.some(

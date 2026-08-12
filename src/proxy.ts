@@ -10,6 +10,6 @@ export const config = {
     /*
      * Tudo, menos: arquivos estáticos, imagens do Next e assets do pdf.js.
      */
-    "/((?!_next/static|_next/image|favicon.ico|pdf.worker.min.mjs|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|icons/|pdf.worker.min.mjs|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
