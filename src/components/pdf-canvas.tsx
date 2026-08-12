@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
-import "@/lib/pdf";
+import { PDFJS_OPTIONS } from "@/lib/pdf";
+import { useSwipe } from "@/lib/swipe";
 import {
   HIGHLIGHT_LABEL,
   fill,
@@ -13,12 +14,6 @@ import {
 } from "@/lib/types";
 
 type Pending = { rects: Rect[]; text: string };
-
-const PDFJS_OPTIONS = {
-  cMapUrl: "/pdfjs/cmaps/",
-  cMapPacked: true,
-  standardFontDataUrl: "/pdfjs/standard_fonts/",
-};
 
 const CORES: HighlightColor[] = ["yellow", "green", "blue", "pink"];
 
@@ -47,11 +42,11 @@ export default function PdfCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  const toque = useRef<{ x: number; y: number; t: number } | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Highlight | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const swipe = useSwipe(onSwipe, !!pending);
 
   const file = useMemo(() => ({ url: fileUrl }), [fileUrl]);
 
@@ -121,27 +116,6 @@ export default function PdfCanvas({
     [highlights],
   );
 
-  // Deslizar o dedo troca de página (só quando não há seleção ativa).
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0];
-    toque.current = { x: t.clientX, y: t.clientY, t: Date.now() };
-  }
-
-  function onTouchEnd(e: React.TouchEvent) {
-    const ini = toque.current;
-    toque.current = null;
-    if (!ini || pending) return;
-    const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return;
-
-    const t = e.changedTouches[0];
-    const dx = t.clientX - ini.x;
-    const dy = t.clientY - ini.y;
-    if (Date.now() - ini.t > 700) return;
-    if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
-    onSwipe(dx < 0 ? 1 : -1);
-  }
-
   async function salvar(color: HighlightColor) {
     if (!pending) return;
     await onAddHighlight(pending.rects, pending.text, color);
@@ -171,8 +145,7 @@ export default function PdfCanvas({
           ref={pageRef}
           onPointerUp={handlePointerUp}
           onClick={handleClick}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
+          {...swipe}
           className="relative inline-block overflow-hidden rounded-lg bg-white shadow-[0_2px_6px_rgba(60,45,25,0.12),0_20px_50px_-24px_rgba(60,45,25,0.5)]"
         >
           <Page

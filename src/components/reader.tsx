@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { usePreferencia } from "@/lib/prefs";
 import { Botao } from "@/components/ui";
 import {
   swatch,
@@ -21,8 +22,23 @@ const PdfCanvas = dynamic(() => import("./pdf-canvas"), {
   ),
 });
 
+const PdfText = dynamic(() => import("./pdf-text"), {
+  ssr: false,
+  loading: () => (
+    <div className="mx-auto h-96 w-full max-w-[38rem] animate-pulse rounded-lg bg-surface" />
+  ),
+});
+
 type Aba = "marcacoes" | "paginas";
 type Sheet = null | "painel" | "ir";
+type Modo = "pagina" | "texto";
+
+/** Corpo do texto no modo leitura, em rem. */
+const FONTE_BASE = 1.05;
+const FONTE_MIN = 0.85;
+const FONTE_MAX = 2.2;
+const CHAVE_MODO = "marginalia:modo";
+const CHAVE_FONTE = "marginalia:fonte";
 
 export default function Reader({
   book,
@@ -45,9 +61,22 @@ export default function Reader({
   const [aba, setAba] = useState<Aba>("marcacoes");
   const [sheet, setSheet] = useState<Sheet>(null);
   const [salvo, setSalvo] = useState(true);
+  // preferências de leitura, lembradas entre livros
+  const [modo, mudarModo] = usePreferencia<Modo>(CHAVE_MODO, "pagina", (v) =>
+    v === "texto" || v === "pagina" ? v : null,
+  );
+  const [fonte, setFonte] = usePreferencia(CHAVE_FONTE, FONTE_BASE, (v) => {
+    const n = Number(v);
+    return n >= FONTE_MIN && n <= FONTE_MAX ? n : null;
+  });
 
   const marcada = bookmarks.some((b) => b.page === page);
   const daPagina = highlights.filter((h) => h.page === page);
+
+  function mudarFonte(delta: number) {
+    const nova = Math.min(FONTE_MAX, Math.max(FONTE_MIN, fonte + delta));
+    setFonte(Math.round(nova * 100) / 100);
+  }
 
   // ---------- lembrar a página ----------
   const primeiro = useRef(true);
@@ -89,13 +118,19 @@ export default function Reader({
     return () => window.removeEventListener("keydown", onKey);
   }, [page, irPara]);
 
-  async function onLoadSuccess(total: number) {
-    setNumPages(total);
-    if (book.total_pages !== total) {
-      await supabase.from("books").update({ total_pages: total }).eq("id", book.id);
-    }
-    if (page > total) setPage(total);
-  }
+  const onLoadSuccess = useCallback(
+    async (total: number) => {
+      setNumPages(total);
+      setPage((p) => Math.min(p, total));
+      if (book.total_pages !== total) {
+        await supabase
+          .from("books")
+          .update({ total_pages: total })
+          .eq("id", book.id);
+      }
+    },
+    [book.id, book.total_pages, supabase],
+  );
 
   async function addHighlight(
     rects: Rect[],
@@ -214,17 +249,39 @@ export default function Reader({
               </IconBtn>
             </div>
 
-            <div className="flex items-center rounded-xl border border-border">
-              <IconBtn onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}>
-                −
-              </IconBtn>
-              <span className="w-12 text-center text-xs text-muted">
-                {Math.round(zoom * 100)}%
-              </span>
-              <IconBtn onClick={() => setZoom((z) => Math.min(3, z + 0.15))}>
-                +
-              </IconBtn>
-            </div>
+            <Segmento modo={modo} onModo={mudarModo} />
+
+            {modo === "pagina" ? (
+              <div className="flex items-center rounded-xl border border-border">
+                <IconBtn onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}>
+                  −
+                </IconBtn>
+                <span className="w-12 text-center text-xs text-muted">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <IconBtn onClick={() => setZoom((z) => Math.min(3, z + 0.15))}>
+                  +
+                </IconBtn>
+              </div>
+            ) : (
+              <div className="flex items-center rounded-xl border border-border">
+                <IconBtn
+                  onClick={() => mudarFonte(-0.1)}
+                  disabled={fonte <= FONTE_MIN}
+                >
+                  <span className="text-[13px] font-semibold">A−</span>
+                </IconBtn>
+                <span className="w-12 text-center text-xs text-muted">
+                  {Math.round((fonte / FONTE_BASE) * 100)}%
+                </span>
+                <IconBtn
+                  onClick={() => mudarFonte(0.1)}
+                  disabled={fonte >= FONTE_MAX}
+                >
+                  <span className="text-[17px] font-semibold">A+</span>
+                </IconBtn>
+              </div>
+            )}
 
             <button
               onClick={toggleBookmark}
@@ -243,19 +300,31 @@ export default function Reader({
       <div className="flex flex-1 items-start">
         {/* ================= página ================= */}
         <main className="min-w-0 flex-1 px-2 pb-32 pt-4 sm:px-6 sm:pb-10 sm:pt-6">
-          <PdfCanvas
-            fileUrl={fileUrl}
-            pageNumber={page}
-            zoom={zoom}
-            highlights={daPagina}
-            onLoadSuccess={onLoadSuccess}
-            onAddHighlight={addHighlight}
-            onDeleteHighlight={delHighlight}
-            onSwipe={(dir) => irPara(page + dir)}
-          />
+          {modo === "pagina" ? (
+            <PdfCanvas
+              fileUrl={fileUrl}
+              pageNumber={page}
+              zoom={zoom}
+              highlights={daPagina}
+              onLoadSuccess={onLoadSuccess}
+              onAddHighlight={addHighlight}
+              onDeleteHighlight={delHighlight}
+              onSwipe={(dir) => irPara(page + dir)}
+            />
+          ) : (
+            <PdfText
+              fileUrl={fileUrl}
+              pageNumber={page}
+              escala={fonte}
+              onLoadSuccess={onLoadSuccess}
+              onSwipe={(dir) => irPara(page + dir)}
+              onModoPagina={() => mudarModo("pagina")}
+            />
+          )}
           <p className="mt-5 text-center text-xs text-muted">
-            Selecione um trecho para marcar · deslize o dedo ou use ← → para
-            virar a página
+            {modo === "pagina"
+              ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
+              : "Texto remontado do PDF — layout, imagens e marcações só no modo Página"}
           </p>
         </main>
 
@@ -359,32 +428,77 @@ export default function Reader({
 
                 <div>
                   <p className="mb-2 text-sm font-medium text-muted">
-                    Tamanho da página · {Math.round(zoom * 100)}%
+                    Como ler
                   </p>
-                  <div className="flex gap-2">
-                    <Botao
-                      variante="contorno"
-                      onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
-                      className="flex-1 text-xl"
-                    >
-                      −
-                    </Botao>
-                    <Botao
-                      variante="contorno"
-                      onClick={() => setZoom(1)}
-                      className="flex-1"
-                    >
-                      Ajustar
-                    </Botao>
-                    <Botao
-                      variante="contorno"
-                      onClick={() => setZoom((z) => Math.min(3, z + 0.15))}
-                      className="flex-1 text-xl"
-                    >
-                      +
-                    </Botao>
-                  </div>
+                  <Segmento
+                    modo={modo}
+                    onModo={mudarModo}
+                    className="w-full [&_button]:!min-h-12"
+                  />
                 </div>
+
+                {modo === "pagina" ? (
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-muted">
+                      Tamanho da página · {Math.round(zoom * 100)}%
+                    </p>
+                    <div className="flex gap-2">
+                      <Botao
+                        variante="contorno"
+                        onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
+                        className="flex-1 text-xl"
+                      >
+                        −
+                      </Botao>
+                      <Botao
+                        variante="contorno"
+                        onClick={() => setZoom(1)}
+                        className="flex-1"
+                      >
+                        Ajustar
+                      </Botao>
+                      <Botao
+                        variante="contorno"
+                        onClick={() => setZoom((z) => Math.min(3, z + 0.15))}
+                        className="flex-1 text-xl"
+                      >
+                        +
+                      </Botao>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-muted">
+                      Tamanho da letra · {Math.round((fonte / FONTE_BASE) * 100)}
+                      %
+                    </p>
+                    <div className="flex gap-2">
+                      <Botao
+                        variante="contorno"
+                        onClick={() => mudarFonte(-0.1)}
+                        disabled={fonte <= FONTE_MIN}
+                        className="flex-1 text-base"
+                      >
+                        A−
+                      </Botao>
+                      <Botao
+                        variante="contorno"
+                        onClick={() => mudarFonte(FONTE_BASE - fonte)}
+                        className="flex-1"
+                      >
+                        Padrão
+                      </Botao>
+                      <Botao
+                        variante="contorno"
+                        onClick={() => mudarFonte(0.1)}
+                        disabled={fonte >= FONTE_MAX}
+                        className="flex-1 text-2xl"
+                      >
+                        A+
+                      </Botao>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -500,6 +614,44 @@ function Painel({
         )}
       </div>
     </>
+  );
+}
+
+function Segmento({
+  modo,
+  onModo,
+  className = "",
+}: {
+  modo: Modo;
+  onModo: (m: Modo) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Modo de leitura"
+      className={`flex items-center gap-0.5 rounded-xl border border-border p-0.5 ${className}`}
+    >
+      {(
+        [
+          ["pagina", "▤ Página"],
+          ["texto", "¶ Texto"],
+        ] as [Modo, string][]
+      ).map(([k, label]) => (
+        <button
+          key={k}
+          onClick={() => onModo(k)}
+          aria-pressed={modo === k}
+          className={`tap !min-h-10 min-w-0 flex-1 rounded-lg px-3 text-sm font-medium transition ${
+            modo === k
+              ? "bg-accent/12 text-accent"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 

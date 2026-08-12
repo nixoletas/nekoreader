@@ -1,11 +1,39 @@
 "use client";
 
 import { pdfjs } from "react-pdf";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // Worker servido pelo próprio app (copiado em prebuild/predev).
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 export { pdfjs };
+
+export const PDFJS_OPTIONS = {
+  cMapUrl: "/pdfjs/cmaps/",
+  cMapPacked: true,
+  standardFontDataUrl: "/pdfjs/standard_fonts/",
+};
+
+/**
+ * Documento aberto direto pelo pdf.js (o modo texto não usa <Page>).
+ * Guarda um por vez: trocar de livro fecha o anterior.
+ */
+const abertos = new Map<string, Promise<PDFDocumentProxy>>();
+
+export function abrirDoc(url: string): Promise<PDFDocumentProxy> {
+  const jaAberto = abertos.get(url);
+  if (jaAberto) return jaAberto;
+
+  for (const [chave, doc] of abertos) {
+    abertos.delete(chave);
+    void doc.then((d) => d.destroy()).catch(() => {});
+  }
+
+  const promessa = pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
+  abertos.set(url, promessa);
+  promessa.catch(() => abertos.delete(url));
+  return promessa;
+}
 
 /** Lê nº de páginas e gera capa JPEG da página 1. */
 export async function inspecionarPdf(file: File): Promise<{
