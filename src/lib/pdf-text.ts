@@ -1,7 +1,13 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { extrairImagens, type ImagemPagina } from "@/lib/pdf-images";
 
-/** Um pedaço de texto já remontado, pronto para virar <p> ou <h2>. */
-export type Bloco = { tipo: "titulo" | "paragrafo"; texto: string };
+/** Um pedaço de conteúdo já remontado, pronto para virar <p>, <h2> ou <img>. */
+export type Bloco =
+  | { tipo: "titulo" | "paragrafo"; texto: string }
+  | { tipo: "imagem"; url: string; largura: number; altura: number };
+
+/** Bloco de texto com a posição vertical (pt) que ele ocupava na página — só pra encaixar as imagens. */
+type BlocoPosicionado = { y: number; bloco: Bloco };
 
 type Item = {
   texto: string;
@@ -27,7 +33,10 @@ export async function extrairBlocos(
 ): Promise<Bloco[]> {
   const page = await doc.getPage(pageNumber);
   const { width: pw, height: ph } = page.getViewport({ scale: 1 });
-  const conteudo = await page.getTextContent();
+  const [conteudo, imagens] = await Promise.all([
+    page.getTextContent(),
+    extrairImagens(page),
+  ]);
 
   const itens: Item[] = [];
   for (const it of conteudo.items) {
@@ -41,20 +50,57 @@ export async function extrairBlocos(
       espaco: !it.str.trim(),
     });
   }
-  if (!itens.some((i) => !i.espaco)) return [];
+  if (!itens.some((i) => !i.espaco)) {
+    // página sem texto (digitalizada) — se tiver imagem, ao menos ela aparece
+    return imagens
+      .sort((a, b) => b.y + b.h - (a.y + a.h))
+      .map(imagemParaBloco);
+  }
 
   const corpo =
     mediana(itens.filter((i) => !i.espaco).map((i) => i.alt)) || 10;
 
-  const blocos = separarColunas(itens, pw).flatMap((col) => {
+  const colunasTexto = separarColunas(itens, pw);
+  const duas = colunasTexto.length === 2;
+  const meio = pw / 2;
+  const gruposImagem = duas
+    ? [
+        imagens.filter((im) => im.x + im.w / 2 < meio),
+        imagens.filter((im) => im.x + im.w / 2 >= meio),
+      ]
+    : [imagens];
+
+  const posicionados = colunasTexto.flatMap((col, i) => {
     const linhas = semCabecalho(agruparLinhas(col, corpo), ph);
-    return juntarParagrafos(linhas, corpo);
+    const paragrafos = juntarParagrafos(linhas, corpo);
+    return mesclarImagens(paragrafos, gruposImagem[i] ?? []);
   });
+
+  const blocos = posicionados.map((p) => p.bloco);
 
   // Número de página solto no meio do caminho não vira parágrafo.
   return blocos.length > 2
-    ? blocos.filter((b) => !/^\d{1,4}$/.test(b.texto))
+    ? blocos.filter((b) => b.tipo === "imagem" || !/^\d{1,4}$/.test(b.texto))
     : blocos;
+}
+
+function imagemParaBloco(im: ImagemPagina): Bloco {
+  return { tipo: "imagem", url: im.url, largura: im.largura, altura: im.altura };
+}
+
+/** Intercala parágrafos e imagens na ordem em que aparecem na página (de cima pra baixo). */
+function mesclarImagens(
+  paragrafos: BlocoPosicionado[],
+  imagens: ImagemPagina[],
+): BlocoPosicionado[] {
+  if (!imagens.length) return paragrafos;
+
+  const itensImagem: BlocoPosicionado[] = imagens.map((im) => ({
+    y: im.y + im.h, // topo do retângulo — eixo do pdf cresce pra cima
+    bloco: imagemParaBloco(im),
+  }));
+
+  return [...paragrafos, ...itensImagem].sort((a, b) => b.y - a.y);
 }
 
 /* ---------------------------------------------------------------- */
@@ -141,15 +187,15 @@ function semCabecalho(linhas: Linha[], ph: number): Linha[] {
 }
 
 /** Linhas → parágrafos. Quebra por espaçamento, recuo, ponto final ou corpo. */
-function juntarParagrafos(linhas: Linha[], corpo: number): Bloco[] {
+function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   if (!linhas.length) return [];
   const esquerda = mediana(linhas.map((l) => l.x));
   const largura = mediana(linhas.map((l) => l.dir - l.x));
 
-  const blocos: Bloco[] = [];
+  const blocos: BlocoPosicionado[] = [];
   let atual: Linha[] = [];
   const fechar = () => {
-    if (atual.length) blocos.push(montar(atual, corpo));
+    if (atual.length) blocos.push({ y: atual[0].y, bloco: montar(atual, corpo) });
     atual = [];
   };
 

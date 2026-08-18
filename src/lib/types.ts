@@ -1,5 +1,10 @@
 export type Rect = { x: number; y: number; w: number; h: number };
 
+/** Trecho marcado dentro de um bloco de texto remontado (modo Texto). */
+export type TextSpan = { bloco: number; start: number; end: number };
+
+export type HighlightMode = "pagina" | "texto";
+
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
 /** Cor cheia — só para os botõezinhos de escolha. */
@@ -54,7 +59,11 @@ export type Highlight = {
   page: number;
   text: string | null;
   color: HighlightColor;
+  mode: HighlightMode;
+  /** Usado no modo página — vazio no modo texto. */
   rects: Rect[];
+  /** Usado no modo texto — vazio no modo página. */
+  spans: TextSpan[];
   created_at: string;
 };
 

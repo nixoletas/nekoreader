@@ -28,10 +28,19 @@ create table if not exists public.highlights (
   page        int  not null,
   text        text,
   color       text not null default 'yellow',
-  -- rects: [{ x, y, w, h }] em fração (0..1) do tamanho da página
-  rects       jsonb not null,
+  -- modo em que a marcação foi feita: 'pagina' (imagem do pdf) ou 'texto' (remontado)
+  mode        text not null default 'pagina',
+  -- rects: [{ x, y, w, h }] em fração (0..1) do tamanho da página — modo página
+  rects       jsonb not null default '[]'::jsonb,
+  -- spans: [{ bloco, start, end }] em offset de caractere do parágrafo remontado — modo texto
+  spans       jsonb not null default '[]'::jsonb,
   created_at  timestamptz not null default now()
 );
+
+-- colunas novas em bancos já existentes (a criação acima só roda em banco vazio)
+alter table public.highlights add column if not exists mode text not null default 'pagina';
+alter table public.highlights add column if not exists spans jsonb not null default '[]'::jsonb;
+alter table public.highlights alter column rects set default '[]'::jsonb;
 
 create index if not exists highlights_book_idx on public.highlights (book_id, page);
 
