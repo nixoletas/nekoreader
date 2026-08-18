@@ -13,6 +13,7 @@ import {
   type Highlight,
   type HighlightColor,
   type Rect,
+  type TextSpan,
 } from "@/lib/types";
 
 const PdfCanvas = dynamic(() => import("./pdf-canvas"), {
@@ -72,6 +73,8 @@ export default function Reader({
 
   const marcada = bookmarks.some((b) => b.page === page);
   const daPagina = highlights.filter((h) => h.page === page);
+  const marcacoesPagina = daPagina.filter((h) => h.mode === "pagina");
+  const marcacoesTexto = daPagina.filter((h) => h.mode === "texto");
 
   function mudarFonte(delta: number) {
     const nova = Math.min(FONTE_MAX, Math.max(FONTE_MIN, fonte + delta));
@@ -133,9 +136,9 @@ export default function Reader({
   );
 
   async function addHighlight(
-    rects: Rect[],
-    text: string,
     color: HighlightColor,
+    text: string,
+    sel: { mode: "pagina"; rects: Rect[] } | { mode: "texto"; spans: TextSpan[] },
   ) {
     const { data, error } = await supabase
       .from("highlights")
@@ -145,7 +148,9 @@ export default function Reader({
         page,
         text: text.slice(0, 2000),
         color,
-        rects,
+        mode: sel.mode,
+        rects: sel.mode === "pagina" ? sel.rects : [],
+        spans: sel.mode === "texto" ? sel.spans : [],
       })
       .select()
       .single();
@@ -154,6 +159,22 @@ export default function Reader({
       return;
     }
     setHighlights((h) => [...h, data as Highlight]);
+  }
+
+  async function addHighlightPagina(
+    rects: Rect[],
+    text: string,
+    color: HighlightColor,
+  ) {
+    await addHighlight(color, text, { mode: "pagina", rects });
+  }
+
+  async function addHighlightTexto(
+    spans: TextSpan[],
+    text: string,
+    color: HighlightColor,
+  ) {
+    await addHighlight(color, text, { mode: "texto", spans });
   }
 
   async function delHighlight(id: string) {
@@ -305,9 +326,9 @@ export default function Reader({
               fileUrl={fileUrl}
               pageNumber={page}
               zoom={zoom}
-              highlights={daPagina}
+              highlights={marcacoesPagina}
               onLoadSuccess={onLoadSuccess}
-              onAddHighlight={addHighlight}
+              onAddHighlight={addHighlightPagina}
               onDeleteHighlight={delHighlight}
               onSwipe={(dir) => irPara(page + dir)}
             />
@@ -316,7 +337,10 @@ export default function Reader({
               fileUrl={fileUrl}
               pageNumber={page}
               escala={fonte}
+              highlights={marcacoesTexto}
               onLoadSuccess={onLoadSuccess}
+              onAddHighlight={addHighlightTexto}
+              onDeleteHighlight={delHighlight}
               onSwipe={(dir) => irPara(page + dir)}
               onModoPagina={() => mudarModo("pagina")}
             />
@@ -324,7 +348,7 @@ export default function Reader({
           <p className="mt-5 text-center text-xs text-muted">
             {modo === "pagina"
               ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
-              : "Texto remontado do PDF — layout, imagens e marcações só no modo Página"}
+              : "Texto remontado do PDF, com as imagens encaixadas — selecione um trecho para marcar"}
           </p>
         </main>
 

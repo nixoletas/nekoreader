@@ -166,6 +166,27 @@ body {
   outline-offset: 1px;
 }
 
+/* ---------- marcações no modo texto: mesmo véu, agora dentro do próprio texto ---------- */
+
+.txt-mark {
+  color: inherit;
+  border-radius: 2px;
+  padding: 0.05em 0;
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.txt-mark[data-ativa="true"] {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .txt-mark {
+    mix-blend-mode: screen;
+  }
+}
+
 /* ---------- animações discretas ---------- */
 
 @keyframes sobe {
