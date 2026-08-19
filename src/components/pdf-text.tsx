@@ -192,7 +192,7 @@ export default function PdfText({
 
   if (!blocos) {
     return (
-      <div className="mx-auto w-full max-w-[38rem] space-y-3 py-6">
+      <div className="mx-auto w-full max-w-[38rem] lg:max-w-[44rem] xl:max-w-[50rem] space-y-3 py-6">
         {progresso !== null && <BarraProgresso texto="Abrindo o livro" pct={progresso} />}
 
         <div className="animate-pulse space-y-3">
@@ -228,7 +228,7 @@ export default function PdfText({
       {...swipe}
       onPointerUp={handlePointerUp}
       onClick={handleClick}
-      className="leitura relative mx-auto max-w-[38rem] rounded-lg bg-surface px-5 py-8 shadow-[0_1px_2px_rgba(60,45,25,0.06),0_16px_40px_-28px_rgba(60,45,25,0.5)] sm:px-9 sm:py-11"
+      className="leitura relative mx-auto max-w-[38rem] lg:max-w-[44rem] xl:max-w-[50rem] rounded-lg bg-surface px-5 py-8 shadow-[0_1px_2px_rgba(60,45,25,0.06),0_16px_40px_-28px_rgba(60,45,25,0.5)] sm:px-9 sm:py-11"
       style={{ fontSize: `${escala}rem` }}
     >
       {blocos.map((b, i) => {
