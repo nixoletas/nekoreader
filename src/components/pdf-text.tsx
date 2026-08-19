@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { abrirDoc } from "@/lib/pdf";
+import { CachePaginas } from "@/lib/pdf-cache";
 import { extrairBlocos, type Bloco } from "@/lib/pdf-text";
 import { useSwipe } from "@/lib/swipe";
-import { Botao } from "@/components/ui";
+import { BarraProgresso, Botao } from "@/components/ui";
 import {
   HIGHLIGHT_LABEL,
   fill,
@@ -18,6 +19,17 @@ type Pending = { spans: TextSpan[]; text: string; x: number; y: number; h: numbe
 type Ativa = { highlight: Highlight; x: number; y: number; h: number };
 
 const CORES: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
+// Quantas páginas já remontadas (com os recortes de imagem) ficam guardadas — folhear
+// pra trás e pra frente não reprocessa. Cada entrada pode carregar algumas imagens em
+// memória, então o tamanho fica moderado de propósito.
+const PAGINAS_EM_CACHE = 8;
+
+function revogarBlocos(blocos: Bloco[]) {
+  blocos.forEach((b) => {
+    if (b.tipo === "imagem") URL.revokeObjectURL(b.url);
+  });
+}
 
 export default function PdfText({
   fileUrl,
@@ -46,48 +58,53 @@ export default function PdfText({
 }) {
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState<number | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Ativa | null>(null);
   const artigoRef = useRef<HTMLElement>(null);
   const swipe = useSwipe(onSwipe, !!pending);
 
-  // Trocar de página limpa o texto antigo (ajuste de estado durante o render).
+  // Páginas já remontadas — o cache é dono dos object URL das imagens que guarda.
+  const [cache] = useState(
+    () => new CachePaginas<Bloco[]>(PAGINAS_EM_CACHE, revogarBlocos),
+  );
+  useEffect(() => () => cache.limpar(), [cache]);
+
+  // Trocar de página limpa o texto antigo — ou já mostra o que tava em cache, sem
+  // piscar o esqueleto de carregamento à toa (ajuste de estado durante o render).
   const alvo = `${fileUrl}#${pageNumber}`;
   const [alvoAnterior, setAlvoAnterior] = useState(alvo);
   if (alvoAnterior !== alvo) {
     setAlvoAnterior(alvo);
-    setBlocos(null);
+    setBlocos(cache.obter(alvo) ?? null);
     setErro(null);
+    setProgresso(null);
     setPending(null);
     setAtiva(null);
   }
 
-  // Recortes de imagem viram object URL — precisam ser liberados quando a página troca.
-  useEffect(() => {
-    return () => {
-      blocos?.forEach((b) => {
-        if (b.tipo === "imagem") URL.revokeObjectURL(b.url);
-      });
-    };
-  }, [blocos]);
-
   useEffect(() => {
     let vivo = true;
+    const chave = `${fileUrl}#${pageNumber}`;
 
     (async () => {
       try {
-        const doc = await abrirDoc(fileUrl);
+        const doc = await abrirDoc(fileUrl, (fracao) => {
+          if (vivo) setProgresso(Math.round(fracao * 100));
+        });
         if (!vivo) return;
+        setProgresso(null);
         onLoadSuccess(doc.numPages);
         if (pageNumber > doc.numPages) return;
+        if (cache.obter(chave)) return; // já em cache — nada a reprocessar
+
         const extraidos = await extrairBlocos(doc, pageNumber);
-        if (vivo) {
-          setBlocos(extraidos);
-        } else {
-          extraidos.forEach((b) => {
-            if (b.tipo === "imagem") URL.revokeObjectURL(b.url);
-          });
+        if (!vivo) {
+          revogarBlocos(extraidos);
+          return;
         }
+        cache.definir(chave, extraidos);
+        setBlocos(extraidos);
       } catch (e) {
         if (vivo)
           setErro(e instanceof Error ? e.message : "Falhou ao ler o PDF.");
@@ -97,7 +114,7 @@ export default function PdfText({
     return () => {
       vivo = false;
     };
-  }, [fileUrl, pageNumber, onLoadSuccess]);
+  }, [fileUrl, pageNumber, onLoadSuccess, cache]);
 
   const handlePointerUp = useCallback(() => {
     const artigoEl = artigoRef.current;
@@ -175,14 +192,18 @@ export default function PdfText({
 
   if (!blocos) {
     return (
-      <div className="mx-auto w-full max-w-[38rem] animate-pulse space-y-3 py-6">
-        {[...Array(9)].map((_, i) => (
-          <span
-            key={i}
-            className="block h-4 rounded bg-surface"
-            style={{ width: `${72 + ((i * 37) % 28)}%` }}
-          />
-        ))}
+      <div className="mx-auto w-full max-w-[38rem] space-y-3 py-6">
+        {progresso !== null && <BarraProgresso texto="Abrindo o livro" pct={progresso} />}
+
+        <div className="animate-pulse space-y-3">
+          {[...Array(9)].map((_, i) => (
+            <span
+              key={i}
+              className="block h-4 rounded bg-surface"
+              style={{ width: `${72 + ((i * 37) % 28)}%` }}
+            />
+          ))}
+        </div>
       </div>
     );
   }

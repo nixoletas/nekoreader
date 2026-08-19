@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import { PDFJS_OPTIONS } from "@/lib/pdf";
 import { useSwipe } from "@/lib/swipe";
+import { BarraProgresso } from "@/components/ui";
 import {
   HIGHLIGHT_LABEL,
   fill,
@@ -46,6 +47,7 @@ export default function PdfCanvas({
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Highlight | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState<number | null>(null);
   const swipe = useSwipe(onSwipe, !!pending);
 
   const file = useMemo(() => ({ url: fileUrl }), [fileUrl]);
@@ -128,12 +130,19 @@ export default function PdfCanvas({
       <Document
         file={file}
         options={PDFJS_OPTIONS}
+        onLoadProgress={({ loaded, total }) =>
+          setProgresso(total > 0 ? Math.round((loaded / total) * 100) : null)
+        }
         onLoadSuccess={(doc) => {
           setErro(null);
+          setProgresso(null);
           onLoadSuccess(doc.numPages);
         }}
-        onLoadError={(e) => setErro(e.message)}
-        loading={<Esqueleto texto="Abrindo o livro" />}
+        onLoadError={(e) => {
+          setProgresso(null);
+          setErro(e.message);
+        }}
+        loading={<Esqueleto texto="Abrindo o livro" progresso={progresso} />}
         error={
           <div className="py-24 text-center text-sm text-red-500">
             {erro ?? "Não consegui abrir esse PDF."}
@@ -220,10 +229,14 @@ export default function PdfCanvas({
   );
 }
 
-function Esqueleto({ texto }: { texto: string }) {
+function Esqueleto({ texto, progresso }: { texto: string; progresso?: number | null }) {
   return (
-    <div className="flex aspect-[1/1.4] w-full max-w-3xl animate-pulse flex-col items-center justify-center rounded-lg bg-surface">
-      <span className="text-sm text-muted">{texto}</span>
+    <div className="flex aspect-[1/1.4] w-full max-w-3xl flex-col items-center justify-center rounded-lg bg-surface">
+      {progresso !== null && progresso !== undefined ? (
+        <BarraProgresso texto={texto} pct={progresso} />
+      ) : (
+        <span className="animate-pulse text-sm text-muted">{texto}</span>
+      )}
     </div>
   );
 }

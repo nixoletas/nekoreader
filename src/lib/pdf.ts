@@ -20,7 +20,15 @@ export const PDFJS_OPTIONS = {
  */
 const abertos = new Map<string, Promise<PDFDocumentProxy>>();
 
-export function abrirDoc(url: string): Promise<PDFDocumentProxy> {
+/**
+ * `onProgress` só é chamado quando o download ainda não começou — se o mesmo `url`
+ * já está aberto (ou abrindo), a chamada devolve a promessa em andamento e ignora
+ * o callback (não tem mais o que reportar).
+ */
+export function abrirDoc(
+  url: string,
+  onProgress?: (fracao: number) => void,
+): Promise<PDFDocumentProxy> {
   const jaAberto = abertos.get(url);
   if (jaAberto) return jaAberto;
 
@@ -29,7 +37,14 @@ export function abrirDoc(url: string): Promise<PDFDocumentProxy> {
     void doc.then((d) => d.destroy()).catch(() => {});
   }
 
-  const promessa = pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
+  const tarefa = pdfjs.getDocument({ url, ...PDFJS_OPTIONS });
+  if (onProgress) {
+    tarefa.onProgress = ({ loaded, total }: { loaded: number; total: number }) => {
+      if (total > 0) onProgress(Math.min(1, loaded / total));
+    };
+  }
+
+  const promessa = tarefa.promise;
   abertos.set(url, promessa);
   promessa.catch(() => abertos.delete(url));
   return promessa;
