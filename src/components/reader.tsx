@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import { usePreferencia } from "@/lib/prefs";
 import { Botao } from "@/components/ui";
 import {
@@ -43,16 +44,34 @@ const CHAVE_FONTE = "marginalia:fonte";
 
 export default function Reader({
   book,
-  fileUrl,
   initialHighlights,
   initialBookmarks,
 }: {
   book: Book;
-  fileUrl: string;
   initialHighlights: Highlight[];
   initialBookmarks: Bookmark[];
 }) {
   const [supabase] = useState(createClient);
+
+  // URL assinada do arquivo — pedida no cliente (e reaproveitada de uma visita pra
+  // outra) pra não gerar uma nova a cada abertura, o que impedia o navegador de
+  // aproveitar o cache HTTP e baixava o livro inteiro de novo toda vez.
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [erroArquivo, setErroArquivo] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    urlAssinadaDoLivro(supabase, book.storage_path)
+      .then((url) => {
+        if (vivo) setFileUrl(url);
+      })
+      .catch((e: unknown) => {
+        if (vivo)
+          setErroArquivo(e instanceof Error ? e.message : "URL não gerada.");
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [supabase, book.storage_path]);
 
   const [numPages, setNumPages] = useState(book.total_pages ?? 0);
   const [page, setPage] = useState(Math.max(1, book.last_page || 1));
@@ -321,35 +340,49 @@ export default function Reader({
       <div className="flex flex-1 items-start">
         {/* ================= página ================= */}
         <main className="min-w-0 flex-1 px-2 pb-32 pt-4 sm:px-6 sm:pb-10 sm:pt-6">
-          {modo === "pagina" ? (
-            <PdfCanvas
-              fileUrl={fileUrl}
-              pageNumber={page}
-              zoom={zoom}
-              highlights={marcacoesPagina}
-              onLoadSuccess={onLoadSuccess}
-              onAddHighlight={addHighlightPagina}
-              onDeleteHighlight={delHighlight}
-              onSwipe={(dir) => irPara(page + dir)}
-            />
+          {erroArquivo ? (
+            <div className="mx-auto max-w-lg px-4 py-24 text-center">
+              <p className="text-lg font-semibold">Não consegui abrir o arquivo</p>
+              <p className="mt-2 text-sm text-muted">{erroArquivo}</p>
+              <Link href="/" className="mt-6 inline-block text-accent underline">
+                Voltar para a biblioteca
+              </Link>
+            </div>
+          ) : !fileUrl ? (
+            <div className="mx-auto aspect-[1/1.4] w-full max-w-3xl animate-pulse rounded-lg bg-surface" />
           ) : (
-            <PdfText
-              fileUrl={fileUrl}
-              pageNumber={page}
-              escala={fonte}
-              highlights={marcacoesTexto}
-              onLoadSuccess={onLoadSuccess}
-              onAddHighlight={addHighlightTexto}
-              onDeleteHighlight={delHighlight}
-              onSwipe={(dir) => irPara(page + dir)}
-              onModoPagina={() => mudarModo("pagina")}
-            />
+            <>
+              {modo === "pagina" ? (
+                <PdfCanvas
+                  fileUrl={fileUrl}
+                  pageNumber={page}
+                  zoom={zoom}
+                  highlights={marcacoesPagina}
+                  onLoadSuccess={onLoadSuccess}
+                  onAddHighlight={addHighlightPagina}
+                  onDeleteHighlight={delHighlight}
+                  onSwipe={(dir) => irPara(page + dir)}
+                />
+              ) : (
+                <PdfText
+                  fileUrl={fileUrl}
+                  pageNumber={page}
+                  escala={fonte}
+                  highlights={marcacoesTexto}
+                  onLoadSuccess={onLoadSuccess}
+                  onAddHighlight={addHighlightTexto}
+                  onDeleteHighlight={delHighlight}
+                  onSwipe={(dir) => irPara(page + dir)}
+                  onModoPagina={() => mudarModo("pagina")}
+                />
+              )}
+              <p className="mt-5 text-center text-xs text-muted">
+                {modo === "pagina"
+                  ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
+                  : "Texto remontado do PDF, com as imagens encaixadas — selecione um trecho para marcar"}
+              </p>
+            </>
           )}
-          <p className="mt-5 text-center text-xs text-muted">
-            {modo === "pagina"
-              ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
-              : "Texto remontado do PDF, com as imagens encaixadas — selecione um trecho para marcar"}
-          </p>
         </main>
 
         {/* ================= painel (desktop) ================= */}
