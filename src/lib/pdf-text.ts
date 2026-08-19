@@ -42,11 +42,7 @@ export async function extrairBlocos(
   for (const it of conteudo.items) {
     if (!("str" in it) || !it.str) continue;
     itens.push({
-      // NFKC: desfaz ligaduras tipográficas (ﬁ, ﬂ, ﬀ...) que a fonte do PDF embute como
-      // um glifo só — sem isso viram um quadradinho, porque a fonte do navegador não tem
-      // esse glifo. Acento continua junto (á, ção...): só ligadura tem forma "compatível"
-      // pra desfazer, o NFKC não mexe em composição canônica.
-      texto: it.str.normalize("NFKC"),
+      texto: saneiaLigaduras(it.str.normalize("NFKC")),
       x: it.transform[4],
       y: it.transform[5],
       w: it.width,
@@ -86,6 +82,24 @@ export async function extrairBlocos(
   return blocos.length > 2
     ? blocos.filter((b) => b.tipo === "imagem" || !/^\d{1,4}$/.test(b.texto))
     : blocos;
+}
+
+/**
+ * Duas avarias comuns de fonte incorporada no PDF, que sem isso viram quadradinho no
+ * meio da palavra (a fonte do navegador não tem glifo pra elas):
+ *
+ * 1. NFKC já desfez ligadura Unicode de verdade (ﬁ, ﬂ, ﬀ...) — isso é feito antes de
+ *    chamar esta função, em quem chama.
+ * 2. Fonte sem `ToUnicode` pro glifo da ligadura "fi": o pdf.js devolve U+0000 (NUL)
+ *    no lugar dela. "fi" é de longe a ligadura mais comum em texto corrido — bem mais
+ *    que fl/ff — então é o chute mais seguro. Qualquer outro caractere de controle
+ *    que sobrar tampouco tem glifo — melhor sumir do que virar quadrado.
+ */
+function saneiaLigaduras(s: string): string {
+  if (!/[\u0000-\u001f\u007f]/.test(s)) return s;
+  return s
+    .replace(/\u0000/g, "fi")
+    .replace(/[\u0001-\u001f\u007f]/g, "");
 }
 
 function imagemParaBloco(im: ImagemPagina): Bloco {
