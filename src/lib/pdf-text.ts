@@ -42,7 +42,11 @@ export async function extrairBlocos(
   for (const it of conteudo.items) {
     if (!("str" in it) || !it.str) continue;
     itens.push({
-      texto: it.str,
+      // NFKC: desfaz ligaduras tipográficas (ﬁ, ﬂ, ﬀ...) que a fonte do PDF embute como
+      // um glifo só — sem isso viram um quadradinho, porque a fonte do navegador não tem
+      // esse glifo. Acento continua junto (á, ção...): só ligadura tem forma "compatível"
+      // pra desfazer, o NFKC não mexe em composição canônica.
+      texto: it.str.normalize("NFKC"),
       x: it.transform[4],
       y: it.transform[5],
       w: it.width,

@@ -49,6 +49,23 @@ export function Botao({
   );
 }
 
+/** Barra de progresso 0–100%, usada enquanto o PDF é baixado pela primeira vez. */
+export function BarraProgresso({ texto, pct }: { texto: string; pct: number }) {
+  return (
+    <div className="mx-auto mb-5 flex w-40 flex-col items-center gap-1.5">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-200"
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </div>
+      <span className="text-xs text-muted">
+        {texto}… {Math.min(100, Math.max(0, pct))}%
+      </span>
+    </div>
+  );
+}
+
 export function Aviso({
   tipo,
   children,
