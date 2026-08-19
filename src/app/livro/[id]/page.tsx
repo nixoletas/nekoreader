@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Reader from "@/components/reader";
@@ -26,24 +25,6 @@ export default async function LivroPage({
     .single();
   if (!book) notFound();
 
-  const { data: signed, error: signedError } = await supabase.storage
-    .from("books")
-    .createSignedUrl((book as Book).storage_path, 60 * 60 * 6);
-
-  if (signedError || !signed?.signedUrl) {
-    return (
-      <main className="mx-auto max-w-lg px-4 py-24 text-center">
-        <p className="text-lg font-semibold">Não consegui abrir o arquivo</p>
-        <p className="mt-2 text-sm text-muted">
-          {signedError?.message ?? "URL não gerada."}
-        </p>
-        <Link href="/" className="mt-6 inline-block text-accent underline">
-          Voltar para a biblioteca
-        </Link>
-      </main>
-    );
-  }
-
   const [{ data: highlights }, { data: bookmarks }] = await Promise.all([
     supabase
       .from("highlights")
@@ -61,7 +42,6 @@ export default async function LivroPage({
   return (
     <Reader
       book={book as Book}
-      fileUrl={signed.signedUrl}
       initialHighlights={(highlights ?? []) as Highlight[]}
       initialBookmarks={(bookmarks ?? []) as Bookmark[]}
     />
