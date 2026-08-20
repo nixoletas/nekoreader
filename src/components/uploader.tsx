@@ -1,13 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { inspecionarPdf } from "@/lib/pdf";
 import { Aviso } from "@/components/ui";
 
-export default function Uploader() {
-  const router = useRouter();
+export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +77,7 @@ export default function Uploader() {
 
     setStatus(null);
     if (inputRef.current) inputRef.current.value = "";
-    router.refresh();
+    onUploaded();
   }
 
   return (

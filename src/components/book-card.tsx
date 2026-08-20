@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { formatarTamanho } from "@/lib/pdf";
+import { formatarTamanho } from "@/lib/format";
 import { useOfflineBook } from "@/lib/use-offline-book";
 import type { Book } from "@/lib/types";
 
@@ -12,12 +11,13 @@ export default function BookCard({
   book,
   coverUrl,
   highlightCount,
+  onExcluido,
 }: {
   book: Book;
   coverUrl: string | null;
   highlightCount: number;
+  onExcluido: () => void;
 }) {
-  const router = useRouter();
   const [removendo, setRemovendo] = useState(false);
   const offline = useOfflineBook(book);
 
@@ -42,7 +42,7 @@ export default function BookCard({
       setRemovendo(false);
       return;
     }
-    router.refresh();
+    onExcluido();
   }
 
   async function alternarOffline(e: React.MouseEvent) {
