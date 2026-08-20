@@ -5,6 +5,9 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
+import { obterPdfOffline } from "@/lib/offline-db";
+import { executarOuEnfileirar, sincronizarFila } from "@/lib/offline-sync";
+import { useFilaPendente, useOnline } from "@/lib/use-offline";
 import { usePreferencia } from "@/lib/prefs";
 import { Botao } from "@/components/ui";
 import {
@@ -53,25 +56,44 @@ export default function Reader({
 }) {
   const [supabase] = useState(createClient);
 
-  // URL assinada do arquivo — pedida no cliente (e reaproveitada de uma visita pra
-  // outra) pra não gerar uma nova a cada abertura, o que impedia o navegador de
-  // aproveitar o cache HTTP e baixava o livro inteiro de novo toda vez.
+  // Arquivo do livro: se já foi baixado pra leitura offline, lê o blob local (funciona
+  // sem internet e evita gastar rede à toa); senão pede a URL assinada de sempre.
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
   useEffect(() => {
     let vivo = true;
-    urlAssinadaDoLivro(supabase, book.storage_path)
-      .then((url) => {
+    let urlLocal: string | null = null;
+
+    (async () => {
+      try {
+        const offline = await obterPdfOffline(book.id);
+        if (!vivo) return;
+        if (offline) {
+          urlLocal = URL.createObjectURL(offline.blob);
+          setFileUrl(urlLocal);
+          return;
+        }
+        const url = await urlAssinadaDoLivro(supabase, book.storage_path);
         if (vivo) setFileUrl(url);
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         if (vivo)
           setErroArquivo(e instanceof Error ? e.message : "URL não gerada.");
-      });
+      }
+    })();
+
     return () => {
       vivo = false;
+      if (urlLocal) URL.revokeObjectURL(urlLocal);
     };
-  }, [supabase, book.storage_path]);
+  }, [supabase, book.id, book.storage_path]);
+
+  // Sincroniza a fila local (progresso, marcações) sempre que a conexão estiver de pé.
+  const online = useOnline();
+  const pendencias = useFilaPendente();
+  useEffect(() => {
+    if (!online) return;
+    void sincronizarFila(supabase);
+  }, [online, supabase]);
 
   const [numPages, setNumPages] = useState(book.total_pages ?? 0);
   const [page, setPage] = useState(Math.max(1, book.last_page || 1));
@@ -109,10 +131,12 @@ export default function Reader({
     }
     setSalvo(false);
     const t = setTimeout(async () => {
-      await supabase
-        .from("books")
-        .update({ last_page: page, last_read_at: new Date().toISOString() })
-        .eq("id", book.id);
+      await executarOuEnfileirar(supabase, `last_page:${book.id}`, {
+        tipo: "last_page",
+        bookId: book.id,
+        page,
+        lastReadAt: new Date().toISOString(),
+      });
       setSalvo(true);
     }, 700);
     return () => clearTimeout(t);
@@ -159,25 +183,23 @@ export default function Reader({
     text: string,
     sel: { mode: "pagina"; rects: Rect[] } | { mode: "texto"; spans: TextSpan[] },
   ) {
-    const { data, error } = await supabase
-      .from("highlights")
-      .insert({
-        book_id: book.id,
-        user_id: book.user_id,
-        page,
-        text: text.slice(0, 2000),
-        color,
-        mode: sel.mode,
-        rects: sel.mode === "pagina" ? sel.rects : [],
-        spans: sel.mode === "texto" ? sel.spans : [],
-      })
-      .select()
-      .single();
-    if (error) {
-      alert(`Não salvou a marcação: ${error.message}`);
-      return;
-    }
-    setHighlights((h) => [...h, data as Highlight]);
+    const registro: Highlight = {
+      id: crypto.randomUUID(),
+      book_id: book.id,
+      user_id: book.user_id,
+      page,
+      text: text.slice(0, 2000),
+      color,
+      mode: sel.mode,
+      rects: sel.mode === "pagina" ? sel.rects : [],
+      spans: sel.mode === "texto" ? sel.spans : [],
+      created_at: new Date().toISOString(),
+    };
+    setHighlights((h) => [...h, registro]);
+    await executarOuEnfileirar(supabase, `add:${registro.id}`, {
+      tipo: "highlight_add",
+      row: registro,
+    });
   }
 
   async function addHighlightPagina(
@@ -198,29 +220,31 @@ export default function Reader({
 
   async function delHighlight(id: string) {
     setHighlights((h) => h.filter((x) => x.id !== id));
-    const { error } = await supabase.from("highlights").delete().eq("id", id);
-    if (error) alert(error.message);
+    await executarOuEnfileirar(supabase, `del:${id}`, { tipo: "highlight_del", id });
   }
 
   async function delBookmark(id: string) {
     setBookmarks((b) => b.filter((x) => x.id !== id));
-    await supabase.from("bookmarks").delete().eq("id", id);
+    await executarOuEnfileirar(supabase, `bmdel:${id}`, { tipo: "bookmark_del", id });
   }
 
   async function toggleBookmark() {
     const existente = bookmarks.find((b) => b.page === page);
     if (existente) return delBookmark(existente.id);
 
-    const { data, error } = await supabase
-      .from("bookmarks")
-      .insert({ book_id: book.id, user_id: book.user_id, page })
-      .select()
-      .single();
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    setBookmarks((b) => [...b, data as Bookmark].sort((x, y) => x.page - y.page));
+    const registro: Bookmark = {
+      id: crypto.randomUUID(),
+      book_id: book.id,
+      user_id: book.user_id,
+      page,
+      label: null,
+      created_at: new Date().toISOString(),
+    };
+    setBookmarks((b) => [...b, registro].sort((x, y) => x.page - y.page));
+    await executarOuEnfileirar(supabase, `bmadd:${registro.id}`, {
+      tipo: "bookmark_add",
+      row: registro,
+    });
   }
 
   const painel = (
@@ -258,13 +282,36 @@ export default function Reader({
             {book.title}
           </h1>
 
-          <span
-            aria-label={salvo ? "salvo" : "salvando"}
-            title={salvo ? "Tudo salvo" : "Salvando..."}
-            className={`mr-1 h-2 w-2 shrink-0 rounded-full transition ${
-              salvo ? "bg-emerald-500/70" : "bg-[var(--gold)] animate-pulse"
-            }`}
-          />
+          {!online ? (
+            <span
+              title={
+                pendencias > 0
+                  ? `Sem internet · ${pendencias} pendente${pendencias > 1 ? "s" : ""} pra sincronizar`
+                  : "Sem internet — lendo offline"
+              }
+              className="mr-1 shrink-0 rounded-full bg-muted/15 px-2 py-0.5 text-[10px] font-medium text-muted"
+            >
+              offline{pendencias > 0 ? ` · ${pendencias}` : ""}
+            </span>
+          ) : (
+            <span
+              aria-label={
+                pendencias > 0 ? `${pendencias} pendente(s) de sincronizar` : salvo ? "salvo" : "salvando"
+              }
+              title={
+                pendencias > 0
+                  ? `Sincronizando ${pendencias} pendência${pendencias > 1 ? "s" : ""}...`
+                  : salvo
+                    ? "Tudo salvo"
+                    : "Salvando..."
+              }
+              className={`mr-1 h-2 w-2 shrink-0 rounded-full transition ${
+                salvo && pendencias === 0
+                  ? "bg-emerald-500/70"
+                  : "bg-[var(--gold)] animate-pulse"
+              }`}
+            />
+          )}
 
           {/* controles completos só no desktop */}
           <div className="hidden items-center gap-1 lg:flex">

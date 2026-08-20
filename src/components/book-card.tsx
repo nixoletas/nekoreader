@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatarTamanho } from "@/lib/pdf";
+import { useOfflineBook } from "@/lib/use-offline-book";
 import type { Book } from "@/lib/types";
 
 export default function BookCard({
@@ -18,6 +19,7 @@ export default function BookCard({
 }) {
   const router = useRouter();
   const [removendo, setRemovendo] = useState(false);
+  const offline = useOfflineBook(book);
 
   const progresso =
     book.total_pages && book.total_pages > 1
@@ -41,6 +43,18 @@ export default function BookCard({
       return;
     }
     router.refresh();
+  }
+
+  async function alternarOffline(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (offline.status === "baixando") return;
+    if (offline.status === "disponivel") {
+      if (!confirm(`Remover a cópia offline de “${book.title}”?`)) return;
+      await offline.remover();
+      return;
+    }
+    void offline.baixar();
   }
 
   return (
@@ -105,6 +119,38 @@ export default function BookCard({
         className="tap absolute right-1 top-1 !min-h-10 !min-w-10 rounded-full bg-black/45 text-sm text-white opacity-0 backdrop-blur-sm transition hover:bg-red-600 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
       >
         {removendo ? "…" : "🗑"}
+      </button>
+
+      <button
+        onClick={alternarOffline}
+        disabled={offline.status === "baixando"}
+        aria-label={
+          offline.status === "disponivel"
+            ? `Remover cópia offline de ${book.title}`
+            : offline.status === "baixando"
+              ? "Baixando para leitura offline"
+              : `Disponibilizar ${book.title} offline`
+        }
+        title={
+          offline.status === "disponivel"
+            ? "Disponível offline"
+            : "Disponibilizar offline"
+        }
+        className={`tap absolute left-1 top-1 !min-h-10 !min-w-10 rounded-full text-xs font-semibold text-white backdrop-blur-sm transition ${
+          offline.status === "disponivel"
+            ? "bg-emerald-600/80"
+            : offline.status === "baixando"
+              ? "bg-black/55"
+              : "bg-black/45 opacity-0 hover:bg-black/60 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+        }`}
+      >
+        {offline.status === "disponivel"
+          ? "✓"
+          : offline.status === "baixando"
+            ? offline.progresso === null
+              ? "…"
+              : `${offline.progresso}%`
+            : "⬇"}
       </button>
     </article>
   );
