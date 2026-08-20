@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
-import { obterPdfOffline } from "@/lib/offline-db";
-import { executarOuEnfileirar, sincronizarFila } from "@/lib/offline-sync";
+import { obterPdfOffline, obterSnapshotLivro, salvarSnapshotLivro } from "@/lib/offline-db";
+import { executarOuEnfileirar, mesclarFilaLocal, sincronizarFila } from "@/lib/offline-sync";
 import { useFilaPendente, useOnline } from "@/lib/use-offline";
 import { usePreferencia } from "@/lib/prefs";
 import { Botao } from "@/components/ui";
@@ -45,7 +46,122 @@ const FONTE_MAX = 2.2;
 const CHAVE_MODO = "marginalia:modo";
 const CHAVE_FONTE = "marginalia:fonte";
 
-export default function Reader({
+type EstadoLivro = {
+  book: Book;
+  highlights: Highlight[];
+  bookmarks: Bookmark[];
+  deDados: boolean;
+};
+
+/**
+ * Busca o livro (dados + marcações) pelo id da URL, no cliente — não no servidor.
+ * É isso que permite o service worker guardar um "casco" genérico da página e
+ * reabrir o leitor offline: o HTML em cache não carrega dado nenhum embutido, quem
+ * busca é este componente, e ele sabe cair pro retrato salvo quando não há rede.
+ */
+export default function Reader() {
+  const params = useParams<{ id: string }>();
+  const bookId = params.id;
+  const router = useRouter();
+  const [supabase] = useState(createClient);
+
+  const [estado, setEstado] = useState<EstadoLivro | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const { data: book, error: erroLivro } = await supabase
+        .from("books")
+        .select("*")
+        .eq("id", bookId)
+        .single();
+      if (erroLivro || !book) throw erroLivro ?? new Error("Livro não encontrado.");
+
+      const [{ data: highlights }, { data: bookmarks }] = await Promise.all([
+        supabase
+          .from("highlights")
+          .select("*")
+          .eq("book_id", bookId)
+          .order("page", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase.from("bookmarks").select("*").eq("book_id", bookId).order("page", { ascending: true }),
+      ]);
+
+      const dados = {
+        book: book as Book,
+        highlights: (highlights ?? []) as Highlight[],
+        bookmarks: (bookmarks ?? []) as Bookmark[],
+      };
+      void salvarSnapshotLivro({ bookId, ...dados, atualizadoEm: Date.now() });
+
+      const mesclado = await mesclarFilaLocal(bookId, dados.highlights, dados.bookmarks);
+      setEstado({ book: dados.book, ...mesclado, deDados: false });
+      setErro(null);
+    } catch (e) {
+      if (navigator.onLine) {
+        // Online mas falhou mesmo assim (livro apagado, não é seu, erro de
+        // verdade) — não esconde isso atrás de dado velho do cache.
+        setErro(e instanceof Error ? e.message : "Não consegui carregar este livro.");
+        return;
+      }
+      // sem rede — cai pro retrato salvo da última vez
+      const salvo = await obterSnapshotLivro(bookId);
+      if (salvo) {
+        const mesclado = await mesclarFilaLocal(bookId, salvo.highlights, salvo.bookmarks);
+        setEstado({ book: salvo.book, ...mesclado, deDados: true });
+        setErro(null);
+      } else {
+        setErro(
+          "Sem internet e este livro ainda não foi aberto neste aparelho — abra ele uma vez online antes.",
+        );
+      }
+    }
+  }, [bookId, supabase, router]);
+
+  useEffect(() => {
+    if (!bookId) return;
+    void (async () => {
+      await carregar();
+    })();
+  }, [bookId, carregar]);
+
+  if (erro) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 text-center">
+        <p className="text-lg font-semibold">Não consegui abrir este livro</p>
+        <p className="mt-2 text-sm text-muted">{erro}</p>
+        <Link href="/" className="mt-6 inline-block text-accent underline">
+          Voltar para a biblioteca
+        </Link>
+      </div>
+    );
+  }
+
+  if (!estado) {
+    return (
+      <div className="mx-auto aspect-[1/1.4] w-full max-w-3xl animate-pulse rounded-lg bg-surface" />
+    );
+  }
+
+  return (
+    <ReaderCarregado
+      key={estado.book.id}
+      book={estado.book}
+      initialHighlights={estado.highlights}
+      initialBookmarks={estado.bookmarks}
+    />
+  );
+}
+
+function ReaderCarregado({
   book,
   initialHighlights,
   initialBookmarks,

@@ -2,6 +2,7 @@
 
 import type { createClient } from "@/lib/supabase/client";
 import { enfileirar, listarFila, removerDaFila, type OpFila } from "@/lib/offline-db";
+import type { Bookmark, Highlight } from "@/lib/types";
 
 type Supabase = ReturnType<typeof createClient>;
 
@@ -59,6 +60,47 @@ export async function executarOuEnfileirar(
   } catch {
     await enfileirar(chave, op);
   }
+}
+
+/**
+ * Aplica sobre um retrato (do servidor ou do cache offline) qualquer alteração
+ * deste livro que ainda esteja esperando na fila local — sem isso, reabrir o
+ * livro offline (ou logo após reconectar, antes da fila esvaziar) faria uma
+ * marcação criada offline "sumir" até a próxima sincronização.
+ */
+export async function mesclarFilaLocal(
+  bookId: string,
+  highlights: Highlight[],
+  bookmarks: Bookmark[],
+): Promise<{ highlights: Highlight[]; bookmarks: Bookmark[] }> {
+  const itens = await listarFila();
+  let hl = highlights;
+  let bm = bookmarks;
+
+  for (const { op } of itens) {
+    switch (op.tipo) {
+      case "highlight_add": {
+        const row = op.row as unknown as Highlight;
+        if (row.book_id === bookId && !hl.some((h) => h.id === row.id)) hl = [...hl, row];
+        break;
+      }
+      case "highlight_del":
+        hl = hl.filter((h) => h.id !== op.id);
+        break;
+      case "bookmark_add": {
+        const row = op.row as unknown as Bookmark;
+        if (row.book_id === bookId && !bm.some((b) => b.id === row.id)) bm = [...bm, row];
+        break;
+      }
+      case "bookmark_del":
+        bm = bm.filter((b) => b.id !== op.id);
+        break;
+      case "last_page":
+        break;
+    }
+  }
+
+  return { highlights: hl, bookmarks: [...bm].sort((a, b) => a.page - b.page) };
 }
 
 let sincronizando = false;
