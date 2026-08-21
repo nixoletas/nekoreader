@@ -157,6 +157,57 @@ body {
   margin-top: -0.7em;
 }
 
+/* ---------- código: rola sozinho, não empurra a página ---------- */
+
+.leitura pre {
+  margin: 1.2em 0;
+  padding: 0.85em 1em;
+  border: 1px solid var(--line);
+  border-radius: 0.6em;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  overflow-x: auto;
+  text-align: left;
+  hyphens: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.leitura pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  line-height: 1.55;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ---------- tabela ---------- */
+
+.tabela-rolagem {
+  margin: 1.3em 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.leitura table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.88em;
+  text-align: left;
+  hyphens: none;
+}
+
+.leitura th,
+.leitura td {
+  border: 1px solid var(--line);
+  padding: 0.45em 0.7em;
+  vertical-align: top;
+}
+
+.leitura th {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ---------- alvos de toque ---------- */
 
 .tap {

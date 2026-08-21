@@ -6,11 +6,13 @@
  * conferir o resultado contra um PDF de verdade.
  */
 
-/** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <blockquote> ou <img>. */
+/** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <pre>, <table> ou <img>. */
 export type Bloco =
   | { tipo: "titulo"; nivel: 1 | 2 | 3; texto: string }
   | { tipo: "paragrafo"; texto: string }
   | { tipo: "citacao"; texto: string }
+  | { tipo: "codigo"; texto: string }
+  | { tipo: "tabela"; linhas: string[][] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
 
 /** Bloco com a posição vertical (pt) que ele ocupava na página — só pra encaixar as imagens. */
@@ -24,9 +26,14 @@ export type Item = {
   alt: number;
   /** Fonte do trecho — id do pdf.js, só comparável dentro da mesma página. */
   fonte: string;
+  /** Fonte monoespaçada — é o que denuncia bloco de código. */
+  mono: boolean;
   /** Item que só carrega espaço — separa palavras, não conta como conteúdo. */
   espaco: boolean;
 };
+
+/** Um pedaço de linha separado do vizinho por um vão grande — vira célula de tabela. */
+type Celula = { texto: string; x: number; dir: number };
 
 type Linha = {
   texto: string;
@@ -36,13 +43,21 @@ type Linha = {
   alt: number;
   /** Nenhum trecho da linha usa a fonte do corpo — é candidata a título. */
   soOutraFonte: boolean;
+  /** Toda a linha é monoespaçada — código. (Trecho solto de `código` no meio da frase não conta.) */
+  soMono: boolean;
+  /** Recuo em espaços, pra preservar o aninhamento do código. */
+  recuo: number;
+  /** Pedaços separados por vão largo — 2 ou mais sugerem linha de tabela. */
+  celulas: Celula[];
 };
 
-/** Como a linha vai ser tratada: título (com nível), citação ou texto corrido. */
+/** Como a linha vai ser tratada. */
 type Classe =
   | { tipo: "titulo"; nivel: 1 | 2 | 3 }
   | { tipo: "paragrafo" }
-  | { tipo: "citacao" };
+  | { tipo: "citacao" }
+  | { tipo: "codigo" }
+  | { tipo: "tabela" };
 
 /**
  * Itens de texto da página → blocos, uma lista por coluna.
@@ -132,9 +147,42 @@ function separarColunas(itens: Item[], pw: number): Item[][] {
   return duas ? [esquerda, direita] : [itens];
 }
 
+/**
+ * Corta a linha onde há vão horizontal grande — o "corredor" entre colunas.
+ *
+ * O corte é deliberadamente baixo (pouco mais de 1em): numa tabela real medida
+ * aqui, o corredor entre a 1ª e a 2ª coluna tinha só 18pt contra 11.5pt de corpo,
+ * e um limite mais alto perdia a coluna. Cortar demais não faz estrago porque
+ * `marcarTabelas` só aceita tabela com várias linhas seguidas alinhadas.
+ */
+function separarCelulas(cheios: Item[], alt: number): Celula[] {
+  const emOrdem = [...cheios].sort((a, b) => a.x - b.x);
+  const corte = Math.max(alt * 1.15, 6);
+
+  const celulas: Celula[] = [];
+  let atual: Celula | null = null;
+  let fim = -Infinity;
+
+  for (const it of emOrdem) {
+    if (!atual || it.x - fim > corte) {
+      atual = { texto: it.texto, x: it.x, dir: it.x + it.w };
+      celulas.push(atual);
+    } else {
+      const colado = it.x - fim < alt * 0.15;
+      atual.texto += (colado ? "" : " ") + it.texto;
+      atual.dir = it.x + it.w;
+    }
+    fim = it.x + it.w;
+  }
+
+  return celulas.map((c) => ({ ...c, texto: c.texto.replace(/\s+/g, " ").trim() }));
+}
+
 /** Itens na mesma altura (mesma baseline) viram uma linha de texto. */
 function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[] {
   const ordenados = [...itens].sort((a, b) => b.y - a.y || a.x - b.x);
+  // Borda esquerda da coluna — referência pra medir o recuo do código.
+  const margem = Math.min(...itens.filter((i) => !i.espaco).map((i) => i.x));
 
   const grupos: Item[][] = [];
   for (const it of ordenados) {
@@ -158,13 +206,19 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       }
 
       const cheios = g.filter((i) => !i.espaco);
+      const esq = Math.min(...cheios.map((i) => i.x));
+      const altLinha = mediana(cheios.map((i) => i.alt));
       return {
         texto: texto.replace(/\s+/g, " ").trim(),
-        x: Math.min(...cheios.map((i) => i.x)),
+        x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
-        alt: mediana(cheios.map((i) => i.alt)),
+        alt: altLinha,
         soOutraFonte: cheios.length > 0 && cheios.every((i) => i.fonte !== fonteCorpo),
+        soMono: cheios.length > 0 && cheios.every((i) => i.mono),
+        // Courier tem largura fixa ~0.6em; serve pra converter recuo em nº de espaços.
+        recuo: Math.round((esq - margem) / Math.max(altLinha * 0.6, 1)),
+        celulas: separarCelulas(cheios, altLinha),
       };
     })
     .filter((l) => l.texto);
@@ -182,6 +236,7 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
 function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
   if (linhas.length < 4) return linhas;
   const largura = Math.max(...linhas.map((l) => l.dir - l.x), 1);
+  const esquerda = mediana(linhas.map((l) => l.x));
   const vaos: number[] = [];
   for (let i = 1; i < linhas.length; i++) {
     const v = linhas[i - 1].y - linhas[i].y;
@@ -199,7 +254,21 @@ function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
     // "38 | Capítulo 2" ou "Capítulo 2 | 38"
     const numerada =
       /^\d{1,4}\s*[|·–—]/.test(l.texto) || /[|·–—]\s*\d{1,4}$/.test(l.texto);
-    if (!curta && !soNumero && !numerada) return false;
+    // Título corrido com o número da página numa ponta, sem separador no meio:
+    // "SEC. 1.1  USES OF COMPUTER NETWORKS  9" ou "Evite Informações Erradas  19".
+    // O número precisa estar destacado do resto (é a outra ponta da linha), senão
+    // pegaria frase que só termina em número.
+    const folga = l.alt * 3;
+    const comFolio =
+      l.celulas.length >= 2 &&
+      ((/^\d{1,4}$/.test(l.celulas[l.celulas.length - 1].texto) &&
+        l.celulas[l.celulas.length - 1].x - l.celulas[l.celulas.length - 2].dir > folga) ||
+        (/^\d{1,4}$/.test(l.celulas[0].texto) &&
+          l.celulas[1].x - l.celulas[0].dir > folga));
+    // Carimbo de gráfica ("...Emendas Finais.indd 19 04/07/2011 16:02:23") fica fora
+    // da caixa de texto, à esquerda de onde qualquer conteúdo real começa.
+    const foraDaColuna = l.x < esquerda - corpo;
+    if (!curta && !soNumero && !numerada && !comFolio && !foraDaColuna) return false;
 
     const vizinho = i === 0 ? linhas[1] : linhas[i - 1];
     return Math.abs(l.y - vizinho.y) > vaoTipico * 1.6;
@@ -221,6 +290,10 @@ function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
 function classificar(l: Linha, corpo: number, esquerda: number): Classe {
   const proporcao = l.alt / corpo;
 
+  // Linha inteira em fonte monoespaçada é código. Trecho solto de `código` no meio
+  // da frase não conta — ali a linha é mista, e vira parágrafo normal.
+  if (l.soMono) return { tipo: "codigo" };
+
   if (l.soOutraFonte && proporcao >= 1.05) {
     const nivel = proporcao >= 1.7 ? 1 : proporcao >= 1.28 ? 2 : 3;
     return { tipo: "titulo", nivel };
@@ -234,6 +307,67 @@ function classificar(l: Linha, corpo: number, esquerda: number): Classe {
   return { tipo: "paragrafo" };
 }
 
+/**
+ * Marca como tabela as sequências de linhas partidas em colunas.
+ *
+ * Uma linha só com vão largo não diz nada (pode ser texto justificado ou um
+ * cabeçalho de página); o que denuncia tabela é a **repetição**: várias linhas
+ * seguidas quebrando no mesmo lugar. Por isso exige 2+ linhas vizinhas com o
+ * mesmo número de células e os inícios de coluna quase alinhados.
+ */
+function marcarTabelas(linhas: Linha[], classes: Classe[], corpo: number): void {
+  // Tabela costuma vir em corpo menor e recuada — o que a faria cair na regra de
+  // citação antes de chegar aqui. Por isso as duas classes entram na peneira; só
+  // título e código ficam de fora.
+  const colunavel = (i: number) =>
+    (classes[i].tipo === "paragrafo" || classes[i].tipo === "citacao") &&
+    linhas[i].celulas.length >= 2;
+
+  const alinhadas = (a: Linha, b: Linha) => {
+    if (a.celulas.length !== b.celulas.length) return false;
+    const folga = corpo * 1.5;
+    return a.celulas.every((c, k) => Math.abs(c.x - b.celulas[k].x) <= folga);
+  };
+
+  // 3 linhas seguidas alinhadas: é o que separa tabela de coincidência em texto
+  // justificado, já que o corte de célula é generoso de propósito.
+  const MINIMO = 3;
+
+  let i = 0;
+  while (i < linhas.length) {
+    if (!colunavel(i)) {
+      i++;
+      continue;
+    }
+    let fim = i;
+    while (
+      fim + 1 < linhas.length &&
+      colunavel(fim + 1) &&
+      alinhadas(linhas[fim], linhas[fim + 1])
+    ) {
+      fim++;
+    }
+
+    if (fim - i + 1 >= MINIMO) {
+      let ini = i;
+      // Cabeçalho costuma vir centralizado, então não alinha com o corpo da tabela;
+      // entra pelo número de colunas.
+      if (ini > 0 && colunavel(ini - 1) && linhas[ini - 1].celulas.length === linhas[ini].celulas.length) {
+        ini--;
+      }
+      if (
+        fim + 1 < linhas.length &&
+        colunavel(fim + 1) &&
+        linhas[fim + 1].celulas.length === linhas[fim].celulas.length
+      ) {
+        fim++;
+      }
+      for (let k = ini; k <= fim; k++) classes[k] = { tipo: "tabela" };
+    }
+    i = fim + 1;
+  }
+}
+
 function mesmaClasse(a: Classe, b: Classe): boolean {
   if (a.tipo !== b.tipo) return false;
   return a.tipo === "titulo" && b.tipo === "titulo" ? a.nivel === b.nivel : true;
@@ -245,6 +379,7 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   const esquerda = mediana(linhas.map((l) => l.x));
   const largura = mediana(linhas.map((l) => l.dir - l.x));
   const classes = linhas.map((l) => classificar(l, corpo, esquerda));
+  marcarTabelas(linhas, classes, corpo);
 
   const blocos: BlocoPosicionado[] = [];
   let atual: Linha[] = [];
@@ -265,8 +400,12 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
       // senão cada linha dela viraria um bloco.
       const recuo =
         classes[i].tipo === "paragrafo" && l.x > esquerda + corpo * 0.9;
+      // Só vale pra texto corrido: em código quase toda linha acaba em ; ou },
+      // e em tabela toda célula acaba "curta" — sem isso cada linha viraria um bloco.
       const encerrou =
-        ant.dir - ant.x < largura * 0.82 && /[.!?:;"”')\]]$/.test(ant.texto);
+        classes[i].tipo === "paragrafo" &&
+        ant.dir - ant.x < largura * 0.82 &&
+        /[.!?:;"”')\]]$/.test(ant.texto);
       // Mudou de título pra texto (ou vice-versa) é sempre fim de bloco — é isso
       // que impede o título de ser engolido pelo parágrafo logo abaixo dele.
       const trocouClasse = !mesmaClasse(classes[i], classes[i - 1]);
@@ -284,6 +423,19 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
 const HIFEN_FINAL = /[A-Za-zÀ-ÿ]([-‐‑­])$/;
 
 function montar(linhas: Linha[], classe: Classe): Bloco {
+  // Código mantém a quebra de linha e o recuo — é o que dá sentido ao aninhamento.
+  if (classe.tipo === "codigo") {
+    const base = Math.min(...linhas.map((l) => l.recuo));
+    const texto = linhas
+      .map((l) => " ".repeat(Math.max(0, l.recuo - base)) + l.texto)
+      .join("\n");
+    return { tipo: "codigo", texto };
+  }
+
+  if (classe.tipo === "tabela") {
+    return { tipo: "tabela", linhas: linhas.map((l) => l.celulas.map((c) => c.texto)) };
+  }
+
   let texto = "";
   for (const l of linhas) {
     if (!texto) {

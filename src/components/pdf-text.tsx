@@ -246,7 +246,43 @@ export default function PdfText({
             />
           );
         }
+        if (b.tipo === "tabela") {
+          const [cabecalho, ...corpo] = b.linhas;
+          // Sem `data-bloco`: a marcação guarda posição por caractere dentro do
+          // texto do bloco, e tabela não tem um texto corrido pra indexar. Sem o
+          // atributo, a seleção aqui simplesmente não vira marcação — melhor que
+          // salvar uma marcação que nunca mais aparece.
+          return (
+            <div key={i} className="tabela-rolagem">
+              <table>
+                <thead>
+                  <tr>
+                    {cabecalho.map((c, k) => (
+                      <th key={k}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {corpo.map((linha, k) => (
+                    <tr key={k}>
+                      {linha.map((c, j) => (
+                        <td key={j}>{c}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
         const conteudo = fatiarTexto(b.texto, i, highlights, ativa?.highlight.id ?? null);
+        if (b.tipo === "codigo") {
+          return (
+            <pre key={i} data-bloco={i}>
+              <code>{conteudo}</code>
+            </pre>
+          );
+        }
         if (b.tipo === "titulo") {
           const Cabecalho = (["h1", "h2", "h3"] as const)[b.nivel - 1];
           return (

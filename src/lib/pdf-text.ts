@@ -31,13 +31,17 @@ export async function extrairBlocos(
   const itens: Item[] = [];
   for (const it of conteudo.items) {
     if (!("str" in it) || !it.str) continue;
+    const fonte = "fontName" in it ? String(it.fontName ?? "") : "";
     itens.push({
       texto: saneiaLigaduras(it.str.normalize("NFKC")),
       x: it.transform[4],
       y: it.transform[5],
       w: it.width,
       alt: Math.abs(it.transform[3]) || it.height || 10,
-      fonte: "fontName" in it ? String(it.fontName ?? "") : "",
+      fonte,
+      // O pdf.js já resolve a família da fonte incorporada; "monospace" aqui é o
+      // que separa bloco de código de texto comum.
+      mono: conteudo.styles?.[fonte]?.fontFamily === "monospace",
       espaco: !it.str.trim(),
     });
   }
@@ -63,7 +67,12 @@ export async function extrairBlocos(
 
   // Número de página solto no meio do caminho não vira parágrafo.
   return blocos.length > 2
-    ? blocos.filter((b) => b.tipo === "imagem" || !/^\d{1,4}$/.test(b.texto))
+    ? blocos.filter(
+        (b) =>
+          b.tipo === "imagem" ||
+          b.tipo === "tabela" ||
+          !/^\d{1,4}$/.test(b.texto),
+      )
     : blocos;
 }
 
