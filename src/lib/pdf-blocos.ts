@@ -6,11 +6,14 @@
  * conferir o resultado contra um PDF de verdade.
  */
 
+/** Trecho do texto do bloco, em índice de caractere. */
+export type Faixa = { start: number; end: number };
+
 /** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <pre>, <table> ou <img>. */
 export type Bloco =
   | { tipo: "titulo"; nivel: 1 | 2 | 3; texto: string }
-  | { tipo: "paragrafo"; texto: string }
-  | { tipo: "citacao"; texto: string }
+  | { tipo: "paragrafo"; texto: string; negrito: Faixa[] }
+  | { tipo: "citacao"; texto: string; negrito: Faixa[] }
   | { tipo: "codigo"; texto: string }
   | { tipo: "tabela"; linhas: string[][] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
@@ -49,6 +52,8 @@ type Linha = {
   recuo: number;
   /** Pedaços separados por vão largo — 2 ou mais sugerem linha de tabela. */
   celulas: Celula[];
+  /** Trechos em destaque dentro da linha (índice de caractere no texto dela). */
+  negrito: Faixa[];
 };
 
 /** Como a linha vai ser tratada. */
@@ -196,20 +201,38 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       const emOrdem = [...g].sort((a, b) => a.x - b.x);
       let texto = "";
       let anterior: Item | null = null;
+      const negrito: Faixa[] = [];
 
       for (const it of emOrdem) {
         const separado =
           anterior && it.x - (anterior.x + anterior.w) > it.alt * 0.15;
         if ((it.espaco || separado) && texto && !/\s$/.test(texto)) texto += " ";
-        if (!it.espaco) texto += it.texto;
         anterior = it;
+        if (it.espaco) continue;
+
+        // Normaliza aqui, item a item, em vez de no fim: o índice do trecho em
+        // destaque precisa valer no texto final, e um replace depois deslocaria tudo.
+        const pedaco = it.texto.replace(/\s+/g, " ");
+        const inicio = texto.length;
+        texto += pedaco;
+        // Destaque = outra fonte e maior que o corpo. O mesmo sinal do título, o que
+        // é coerente: é literalmente a fonte de título usada no meio da linha
+        // ("**Metadata.** Metadata is..."). Termo em itálico no corpo do texto usa
+        // outra fonte mas o mesmo tamanho, e por isso não entra aqui.
+        if (it.fonte !== fonteCorpo && it.alt >= corpo * 1.05) {
+          const ultimo = negrito[negrito.length - 1];
+          if (ultimo && ultimo.end === inicio) ultimo.end = texto.length;
+          else negrito.push({ start: inicio, end: texto.length });
+        }
       }
+      while (/\s$/.test(texto)) texto = texto.slice(0, -1);
 
       const cheios = g.filter((i) => !i.espaco);
       const esq = Math.min(...cheios.map((i) => i.x));
       const altLinha = mediana(cheios.map((i) => i.alt));
       return {
-        texto: texto.replace(/\s+/g, " ").trim(),
+        texto,
+        negrito,
         x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
@@ -437,27 +460,37 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
   }
 
   let texto = "";
+  const negrito: Faixa[] = [];
   for (const l of linhas) {
     if (!texto) {
       texto = l.texto;
-      continue;
+    } else {
+      const hifen = HIFEN_FINAL.exec(texto);
+      if (hifen && /^[a-zà-ÿ]/.test(l.texto)) {
+        // Hífen tipográfico é sempre quebra: "Lan‐ guages" → "Languages".
+        // Com hífen comum, só junta sem apagar se a palavra já é composta
+        // ("one-to-" + "many"), senão era hifenização: "conti-" + "nuação".
+        const ultima = texto.slice(texto.lastIndexOf(" ") + 1);
+        const composta = hifen[1] === "-" && ultima.split("-").length > 2;
+        texto = composta ? texto + l.texto : texto.slice(0, -1) + l.texto;
+      } else {
+        texto += " " + l.texto;
+      }
     }
 
-    const hifen = HIFEN_FINAL.exec(texto);
-    if (hifen && /^[a-zà-ÿ]/.test(l.texto)) {
-      // Hífen tipográfico é sempre quebra: "Lan‐ guages" → "Languages".
-      // Com hífen comum, só junta sem apagar se a palavra já é composta
-      // ("one-to-" + "many"), senão era hifenização: "conti-" + "nuação".
-      const ultima = texto.slice(texto.lastIndexOf(" ") + 1);
-      const composta = hifen[1] === "-" && ultima.split("-").length > 2;
-      texto = composta ? texto + l.texto : texto.slice(0, -1) + l.texto;
-      continue;
+    // Onde esta linha acabou caindo no texto do bloco — vale pros três jeitos de
+    // juntar acima, inclusive o que apaga o hífen.
+    const deslocamento = texto.length - l.texto.length;
+    for (const n of l.negrito) {
+      const faixa = { start: n.start + deslocamento, end: n.end + deslocamento };
+      const ultimo = negrito[negrito.length - 1];
+      if (ultimo && ultimo.end >= faixa.start) ultimo.end = Math.max(ultimo.end, faixa.end);
+      else negrito.push(faixa);
     }
-
-    texto += " " + l.texto;
   }
 
+  // Título já é destacado por inteiro; marcar de novo por dentro seria redundante.
   if (classe.tipo === "titulo") return { tipo: "titulo", nivel: classe.nivel, texto };
-  if (classe.tipo === "citacao") return { tipo: "citacao", texto };
-  return { tipo: "paragrafo", texto };
+  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito };
+  return { tipo: "paragrafo", texto, negrito };
 }

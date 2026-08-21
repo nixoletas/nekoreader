@@ -126,13 +126,17 @@ body {
   margin-bottom: 0.45em;
 }
 
-/* Subtítulo curto: destaca pelo peso e pela cor, sem virar um corpo enorme. */
+/* Subtítulo curto: destaca pelo peso, não pela cor. */
 .leitura h3 {
   font-size: 1.1em;
   letter-spacing: 0.005em;
-  color: var(--accent);
   margin-top: 1.5em;
   margin-bottom: 0.35em;
+}
+
+/* Entrada em negrito no começo do parágrafo ("Metadata. Metadata is..."). */
+.leitura strong {
+  font-weight: 700;
 }
 
 .leitura h1:first-child,
