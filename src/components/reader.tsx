@@ -271,15 +271,63 @@ function ReaderCarregado({
     return () => clearTimeout(t);
   }, [page, book.id, supabase]);
 
+  // Onde o leitor estava em cada página já visitada, pra voltar sem se perder.
+  const posicoes = useRef(new Map<number, number>());
+  const aRestaurar = useRef<number | null>(null);
+
   const irPara = useCallback(
     (p: number) => {
       const max = numPages || p;
       const alvo = Math.min(Math.max(1, p), max);
+      if (alvo === page) return;
+      posicoes.current.set(page, window.scrollY);
+      aRestaurar.current = posicoes.current.get(alvo) ?? 0;
       setPage(alvo);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [numPages],
+    [numPages, page],
   );
+
+  /**
+   * Devolve o leitor à altura em que ele estava naquela página.
+   *
+   * Não dá pra rolar de imediato: o conteúdo da página nova ainda está sendo
+   * montado (renderização do PDF ou remontagem do texto) e a página ainda é curta
+   * demais — rolar agora pararia no meio do caminho. Então espera a altura crescer
+   * o bastante, quadro a quadro, e desiste depois de ~1s pra não ficar tentando à toa.
+   */
+  useEffect(() => {
+    const destino = aRestaurar.current;
+    aRestaurar.current = null;
+    if (destino === null) return;
+
+    if (destino <= 0) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    let cancelado = false;
+    let tentativas = 0;
+    const tentar = () => {
+      if (cancelado) return;
+      const limite = document.documentElement.scrollHeight - window.innerHeight;
+      if (limite >= destino || tentativas > 60) {
+        window.scrollTo({ top: Math.max(0, Math.min(destino, limite)) });
+        return;
+      }
+      tentativas++;
+      requestAnimationFrame(tentar);
+    };
+    tentar();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [page]);
+
+  // Trocar de modo muda a altura da página inteira — a altura guardada não vale mais.
+  useEffect(() => {
+    posicoes.current.clear();
+  }, [modo]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
