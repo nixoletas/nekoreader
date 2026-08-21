@@ -28,7 +28,7 @@ export function Botao({
   ...props
 }: {
   children: ReactNode;
-  variante?: "primario" | "contorno" | "fantasma";
+  variante?: "primario" | "contorno" | "fantasma" | "perigo";
   className?: string;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const estilos = {
@@ -37,6 +37,8 @@ export function Botao({
     contorno:
       "border border-border bg-surface text-foreground hover:border-accent/50 active:translate-y-px",
     fantasma: "text-muted hover:text-foreground",
+    perigo:
+      "bg-red-600 text-white shadow-[0_2px_0_0_rgba(0,0,0,0.12)] hover:brightness-110 active:translate-y-px",
   }[variante];
 
   return (

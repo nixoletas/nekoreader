@@ -4,6 +4,19 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlignLeft,
+  ArrowLeft,
+  Bookmark as BookmarkIcon,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Highlighter,
+  Minus,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import { obterPdfOffline, obterSnapshotLivro, salvarSnapshotLivro } from "@/lib/offline-db";
@@ -386,9 +399,9 @@ function ReaderCarregado({
           <Link
             href="/"
             aria-label="Voltar para a estante"
-            className="tap rounded-xl text-lg text-muted transition hover:text-foreground"
+            className="tap rounded-xl text-muted transition hover:text-foreground"
           >
-            ←
+            <ArrowLeft className="h-5 w-5" aria-hidden />
           </Link>
 
           <h1
@@ -432,8 +445,12 @@ function ReaderCarregado({
           {/* controles completos só no desktop */}
           <div className="hidden items-center gap-1 lg:flex">
             <div className="flex items-center rounded-xl border border-border">
-              <IconBtn onClick={() => irPara(page - 1)} disabled={page <= 1}>
-                ‹
+              <IconBtn
+                onClick={() => irPara(page - 1)}
+                disabled={page <= 1}
+                label="Página anterior"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
               </IconBtn>
               <input
                 type="number"
@@ -447,8 +464,9 @@ function ReaderCarregado({
               <IconBtn
                 onClick={() => irPara(page + 1)}
                 disabled={!!numPages && page >= numPages}
+                label="Próxima página"
               >
-                ›
+                <ChevronRight className="h-4 w-4" aria-hidden />
               </IconBtn>
             </div>
 
@@ -456,14 +474,20 @@ function ReaderCarregado({
 
             {modo === "pagina" ? (
               <div className="flex items-center rounded-xl border border-border">
-                <IconBtn onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}>
-                  −
+                <IconBtn
+                  onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
+                  label="Diminuir zoom"
+                >
+                  <Minus className="h-4 w-4" aria-hidden />
                 </IconBtn>
                 <span className="w-12 text-center text-xs text-muted">
                   {Math.round(zoom * 100)}%
                 </span>
-                <IconBtn onClick={() => setZoom((z) => Math.min(3, z + 0.15))}>
-                  +
+                <IconBtn
+                  onClick={() => setZoom((z) => Math.min(3, z + 0.15))}
+                  label="Aumentar zoom"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
                 </IconBtn>
               </div>
             ) : (
@@ -471,8 +495,11 @@ function ReaderCarregado({
                 <IconBtn
                   onClick={() => mudarFonte(-0.1)}
                   disabled={fonte <= FONTE_MIN}
+                  label="Diminuir fonte"
                 >
-                  <span className="text-[13px] font-semibold">A−</span>
+                  <span className="flex items-center text-[13px] font-semibold">
+                    A<Minus className="h-3 w-3" aria-hidden />
+                  </span>
                 </IconBtn>
                 <span className="w-12 text-center text-xs text-muted">
                   {Math.round((fonte / FONTE_BASE) * 100)}%
@@ -480,21 +507,30 @@ function ReaderCarregado({
                 <IconBtn
                   onClick={() => mudarFonte(0.1)}
                   disabled={fonte >= FONTE_MAX}
+                  label="Aumentar fonte"
                 >
-                  <span className="text-[17px] font-semibold">A+</span>
+                  <span className="flex items-center text-[13px] font-semibold">
+                    A<Plus className="h-3 w-3" aria-hidden />
+                  </span>
                 </IconBtn>
               </div>
             )}
 
             <button
               onClick={toggleBookmark}
-              className={`tap rounded-xl border px-4 text-sm font-medium transition ${
+              aria-label={marcada ? "Página marcada" : "Marcar página"}
+              className={`tap flex items-center gap-1.5 rounded-xl border px-4 text-sm font-medium transition ${
                 marcada
                   ? "border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]"
                   : "border-border text-muted hover:text-foreground"
               }`}
             >
-              {marcada ? "★ Marcada" : "☆ Marcar"}
+              <BookmarkIcon
+                className="h-4 w-4"
+                aria-hidden
+                fill={marcada ? "currentColor" : "none"}
+              />
+              {marcada ? "Marcada" : "Marcar"}
             </button>
           </div>
         </div>
@@ -561,13 +597,15 @@ function ReaderCarregado({
           disabled={page <= 1}
           label="Anterior"
         >
-          ‹
+          <ChevronLeft className="h-6 w-6" aria-hidden />
         </BarBtn>
 
         <BarBtn onClick={toggleBookmark} label={marcada ? "Marcada" : "Marcar"}>
-          <span className={marcada ? "text-[var(--gold)]" : ""}>
-            {marcada ? "★" : "☆"}
-          </span>
+          <BookmarkIcon
+            className={`h-6 w-6 ${marcada ? "text-[var(--gold)]" : ""}`}
+            aria-hidden
+            fill={marcada ? "currentColor" : "none"}
+          />
         </BarBtn>
 
         <button
@@ -581,7 +619,7 @@ function ReaderCarregado({
         </button>
 
         <BarBtn onClick={() => setSheet("painel")} label="Marcações">
-          ✎
+          <Highlighter className="h-6 w-6" aria-hidden />
           {highlights.length > 0 && (
             <span className="absolute right-1 top-1 rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">
               {highlights.length}
@@ -594,7 +632,7 @@ function ReaderCarregado({
           disabled={!!numPages && page >= numPages}
           label="Próxima"
         >
-          ›
+          <ChevronRight className="h-6 w-6" aria-hidden />
         </BarBtn>
       </nav>
 
@@ -666,9 +704,10 @@ function ReaderCarregado({
                       <Botao
                         variante="contorno"
                         onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
-                        className="flex-1 text-xl"
+                        className="flex flex-1 items-center justify-center"
+                        aria-label="Diminuir"
                       >
-                        −
+                        <Minus className="h-4 w-4" aria-hidden />
                       </Botao>
                       <Botao
                         variante="contorno"
@@ -680,9 +719,10 @@ function ReaderCarregado({
                       <Botao
                         variante="contorno"
                         onClick={() => setZoom((z) => Math.min(3, z + 0.15))}
-                        className="flex-1 text-xl"
+                        className="flex flex-1 items-center justify-center"
+                        aria-label="Aumentar"
                       >
-                        +
+                        <Plus className="h-4 w-4" aria-hidden />
                       </Botao>
                     </div>
                   </div>
@@ -697,9 +737,10 @@ function ReaderCarregado({
                         variante="contorno"
                         onClick={() => mudarFonte(-0.1)}
                         disabled={fonte <= FONTE_MIN}
-                        className="flex-1 text-base"
+                        className="flex flex-1 items-center justify-center gap-0.5 text-sm font-semibold"
+                        aria-label="Diminuir fonte"
                       >
-                        A−
+                        A<Minus className="h-3.5 w-3.5" aria-hidden />
                       </Botao>
                       <Botao
                         variante="contorno"
@@ -712,9 +753,10 @@ function ReaderCarregado({
                         variante="contorno"
                         onClick={() => mudarFonte(0.1)}
                         disabled={fonte >= FONTE_MAX}
-                        className="flex-1 text-2xl"
+                        className="flex flex-1 items-center justify-center gap-0.5 text-sm font-semibold"
+                        aria-label="Aumentar fonte"
                       >
-                        A+
+                        A<Plus className="h-3.5 w-3.5" aria-hidden />
                       </Botao>
                     </div>
                   </div>
@@ -801,7 +843,7 @@ function Painel({
                     aria-label="Apagar marcação"
                     className="tap !min-h-9 !min-w-9 shrink-0 self-start rounded-lg text-muted transition hover:text-red-500"
                   >
-                    🗑
+                    <Trash2 className="h-4 w-4" aria-hidden />
                   </button>
                 </li>
               ))}
@@ -809,7 +851,7 @@ function Painel({
           )
         ) : bookmarks.length === 0 ? (
           <Vazio>
-            Nenhuma página guardada. Use o ☆ para marcar onde você quer voltar.
+            Nenhuma página guardada. Use o marcador pra voltar aqui depois.
           </Vazio>
         ) : (
           <ul className="divide-y divide-border">
@@ -817,16 +859,21 @@ function Painel({
               <li key={b.id} className="flex items-center gap-2 px-3">
                 <button
                   onClick={() => onIr(b.page)}
-                  className="tap flex-1 justify-start text-[15px] font-medium"
+                  className="tap flex-1 items-center justify-start gap-1.5 text-[15px] font-medium"
                 >
-                  <span className="text-[var(--gold)]">★</span> Página {b.page}
+                  <BookmarkIcon
+                    className="h-4 w-4 shrink-0 text-[var(--gold)]"
+                    aria-hidden
+                    fill="currentColor"
+                  />
+                  Página {b.page}
                 </button>
                 <button
                   onClick={() => onDelBookmark(b.id)}
                   aria-label="Remover marcador"
                   className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-red-500"
                 >
-                  ✕
+                  <X className="h-4 w-4" aria-hidden />
                 </button>
               </li>
             ))}
@@ -854,20 +901,21 @@ function Segmento({
     >
       {(
         [
-          ["pagina", "▤ Página"],
-          ["texto", "¶ Texto"],
-        ] as [Modo, string][]
-      ).map(([k, label]) => (
+          ["pagina", "Página", BookOpen],
+          ["texto", "Texto", AlignLeft],
+        ] as [Modo, string, typeof BookOpen][]
+      ).map(([k, label, Icone]) => (
         <button
           key={k}
           onClick={() => onModo(k)}
           aria-pressed={modo === k}
-          className={`tap !min-h-10 min-w-0 flex-1 rounded-lg px-3 text-sm font-medium transition ${
+          className={`tap flex !min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition ${
             modo === k
               ? "bg-accent/12 text-accent"
               : "text-muted hover:text-foreground"
           }`}
         >
+          <Icone className="h-4 w-4" aria-hidden />
           {label}
         </button>
       ))}
@@ -887,16 +935,19 @@ function IconBtn({
   children,
   onClick,
   disabled,
+  label,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
+  label: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className="tap !min-h-10 !min-w-10 rounded-lg text-lg leading-none text-muted transition hover:bg-background hover:text-foreground disabled:opacity-30"
+      aria-label={label}
+      className="tap flex !min-h-10 !min-w-10 items-center justify-center rounded-lg text-muted transition hover:bg-background hover:text-foreground disabled:opacity-30"
     >
       {children}
     </button>

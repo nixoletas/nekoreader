@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import { obterPdfOffline, removerPdfOffline, salvarPdfOffline } from "@/lib/offline-db";
+import { useAlert } from "@/components/dialog-provider";
 import type { Book } from "@/lib/types";
 
 type Status = "verificando" | "ausente" | "baixando" | "disponivel";
@@ -12,6 +13,7 @@ type Status = "verificando" | "ausente" | "baixando" | "disponivel";
 export function useOfflineBook(book: Pick<Book, "id" | "storage_path">) {
   const [status, setStatus] = useState<Status>("verificando");
   const [progresso, setProgresso] = useState<number | null>(null);
+  const alertar = useAlert();
 
   useEffect(() => {
     let vivo = true;
@@ -60,11 +62,14 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path">) {
       setStatus("disponivel");
     } catch (e) {
       setStatus("ausente");
-      alert(e instanceof Error ? e.message : "Não consegui baixar o livro.");
+      await alertar({
+        titulo: "Não consegui baixar o livro",
+        mensagem: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setProgresso(null);
     }
-  }, [book.id, book.storage_path]);
+  }, [book.id, book.storage_path, alertar]);
 
   const remover = useCallback(async () => {
     await removerPdfOffline(book.id);
