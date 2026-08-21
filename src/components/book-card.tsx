@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Check, Download, Highlighter, Loader2, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatarTamanho } from "@/lib/format";
 import { useOfflineBook } from "@/lib/use-offline-book";
+import { useAlert, useConfirm } from "@/components/dialog-provider";
 import type { Book } from "@/lib/types";
 
 export default function BookCard({
@@ -20,6 +22,8 @@ export default function BookCard({
 }) {
   const [removendo, setRemovendo] = useState(false);
   const offline = useOfflineBook(book);
+  const confirmar = useConfirm();
+  const alertar = useAlert();
 
   const progresso =
     book.total_pages && book.total_pages > 1
@@ -29,8 +33,13 @@ export default function BookCard({
   async function excluir(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(`Tirar “${book.title}” da estante? As marcações vão junto.`))
-      return;
+    const ok = await confirmar({
+      titulo: `Tirar “${book.title}” da estante?`,
+      mensagem: "As marcações vão junto — não dá pra desfazer.",
+      textoConfirmar: "Tirar da estante",
+      perigo: true,
+    });
+    if (!ok) return;
 
     setRemovendo(true);
     const supabase = createClient();
@@ -38,7 +47,7 @@ export default function BookCard({
     await supabase.storage.from("books").remove(paths);
     const { error } = await supabase.from("books").delete().eq("id", book.id);
     if (error) {
-      alert(error.message);
+      await alertar({ titulo: "Não consegui excluir", mensagem: error.message });
       setRemovendo(false);
       return;
     }
@@ -50,7 +59,12 @@ export default function BookCard({
     e.stopPropagation();
     if (offline.status === "baixando") return;
     if (offline.status === "disponivel") {
-      if (!confirm(`Remover a cópia offline de “${book.title}”?`)) return;
+      const ok = await confirmar({
+        titulo: `Remover a cópia offline de “${book.title}”?`,
+        textoConfirmar: "Remover",
+        perigo: true,
+      });
+      if (!ok) return;
       await offline.remover();
       return;
     }
@@ -92,8 +106,8 @@ export default function BookCard({
           )}
 
           {highlightCount > 0 && (
-            <span className="absolute left-2 top-2 z-10 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
-              {highlightCount} ✎
+            <span className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+              {highlightCount} <Highlighter className="h-3 w-3" aria-hidden />
             </span>
           )}
         </div>
@@ -116,9 +130,13 @@ export default function BookCard({
         onClick={excluir}
         disabled={removendo}
         aria-label={`Excluir ${book.title}`}
-        className="tap absolute right-1 top-1 !min-h-10 !min-w-10 rounded-full bg-black/45 text-sm text-white opacity-0 backdrop-blur-sm transition hover:bg-red-600 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
+        className="tap absolute right-1 top-1 !min-h-10 !min-w-10 rounded-full bg-black/45 text-white opacity-0 backdrop-blur-sm transition hover:bg-red-600 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
       >
-        {removendo ? "…" : "🗑"}
+        {removendo ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Trash2 className="h-4 w-4" aria-hidden />
+        )}
       </button>
 
       <button
@@ -144,13 +162,17 @@ export default function BookCard({
               : "bg-black/45 opacity-0 hover:bg-black/60 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
         }`}
       >
-        {offline.status === "disponivel"
-          ? "✓"
-          : offline.status === "baixando"
-            ? offline.progresso === null
-              ? "…"
-              : `${offline.progresso}%`
-            : "⬇"}
+        {offline.status === "disponivel" ? (
+          <Check className="h-4 w-4" aria-hidden />
+        ) : offline.status === "baixando" ? (
+          offline.progresso === null ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            `${offline.progresso}%`
+          )
+        ) : (
+          <Download className="h-4 w-4" aria-hidden />
+        )}
       </button>
     </article>
   );

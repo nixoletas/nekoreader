@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { inspecionarPdf } from "@/lib/pdf";
 import { Aviso } from "@/components/ui";
@@ -112,8 +113,12 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
           onChange={(e) => e.target.files && void enviar(e.target.files)}
         />
 
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-2xl transition group-hover:scale-105">
-          {status ? "⏳" : "＋"}
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent transition group-hover:scale-105">
+          {status ? (
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+          ) : (
+            <Plus className="h-6 w-6" aria-hidden />
+          )}
         </div>
 
         {status ? (

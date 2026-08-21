@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces } from "next/font/google";
 import SwRegister from "@/components/sw-register";
+import { DialogProvider } from "@/components/dialog-provider";
 import "./globals.css";
 
 const display = Fraunces({
@@ -44,7 +45,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={display.variable}>
       <body className="antialiased">
-        {children}
+        <DialogProvider>{children}</DialogProvider>
         <SwRegister />
       </body>
     </html>

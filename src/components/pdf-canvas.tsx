@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
+import { Trash2, X } from "lucide-react";
 import { PDFJS_OPTIONS } from "@/lib/pdf";
 import { useSwipe } from "@/lib/swipe";
 import { BarraProgresso } from "@/components/ui";
@@ -203,9 +204,9 @@ export default function PdfCanvas({
                   window.getSelection()?.removeAllRanges();
                 }}
                 aria-label="Cancelar"
-                className="h-10 w-10 rounded-full text-lg text-white/70 transition active:scale-90"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition active:scale-90"
               >
-                ✕
+                <X className="h-4 w-4" aria-hidden />
               </button>
             </Popover>
           )}
@@ -217,9 +218,10 @@ export default function PdfCanvas({
                   await onDeleteHighlight(ativa.id);
                   setAtiva(null);
                 }}
-                className="tap !min-h-10 rounded-lg px-3 text-sm font-medium text-white"
+                className="tap flex !min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white"
               >
-                🗑 Apagar marcação
+                <Trash2 className="h-4 w-4" aria-hidden />
+                Apagar marcação
               </button>
             </Popover>
           )}
