@@ -59,6 +59,13 @@ const FONTE_MAX = 2.2;
 const CHAVE_MODO = "marginalia:modo";
 const CHAVE_FONTE = "marginalia:fonte";
 
+/** Quanto da página já rolou, de 0 a 1. */
+function fracaoAtual(): number {
+  const limite = document.documentElement.scrollHeight - window.innerHeight;
+  if (limite <= 0) return 0;
+  return Math.max(0, Math.min(1, window.scrollY / limite));
+}
+
 type EstadoLivro = {
   book: Book;
   highlights: Highlight[];
@@ -251,83 +258,182 @@ function ReaderCarregado({
     setFonte(Math.round(nova * 100) / 100);
   }
 
-  // ---------- lembrar a página ----------
+  /**
+   * Onde a leitura parou em cada página, em fração da rolagem (0..1).
+   *
+   * Fração e não pixel: 1200px no computador não é o mesmo lugar no celular, nem
+   * com outro zoom ou tamanho de letra. A fração é a mesma em qualquer tela — e
+   * também sobrevive à troca entre modo Página e modo Texto, já que "40% da
+   * página 12" quer dizer a mesma coisa nos dois.
+   */
+  const [posicoes] = useState(() => {
+    const mapa = new Map<number, number>();
+    for (const [k, v] of Object.entries(book.positions ?? {})) {
+      const pagina = Number(k);
+      const fracao = Number(v);
+      if (Number.isFinite(pagina) && Number.isFinite(fracao)) {
+        mapa.set(pagina, Math.max(0, Math.min(1, fracao)));
+      }
+    }
+    return mapa;
+  });
+
+  const paginaRef = useRef(page);
+  useEffect(() => {
+    paginaRef.current = page;
+  }, [page]);
+
+  // Reabrir o livro cai direto onde a leitura parou (inclusive vindo de outro aparelho).
+  const [fracaoInicial] = useState(
+    () => posicoes.get(Math.max(1, book.last_page || 1)) ?? null,
+  );
+  const aRestaurar = useRef<number | null>(fracaoInicial);
+  // Enquanto está reposicionando, os eventos de rolagem não valem: a página ainda
+  // está curta e gravariam 0 por cima da posição boa.
+  const restaurando = useRef(fracaoInicial !== null);
+
+  // ---------- guardar página + posições ----------
+  const salvarRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendente = useRef(false);
+
+  const gravar = useCallback(() => {
+    pendente.current = false;
+    if (salvarRef.current) {
+      clearTimeout(salvarRef.current);
+      salvarRef.current = null;
+    }
+    return executarOuEnfileirar(supabase, `last_page:${book.id}`, {
+      tipo: "last_page",
+      bookId: book.id,
+      page: paginaRef.current,
+      lastReadAt: new Date().toISOString(),
+      positions: Object.fromEntries(posicoes),
+    });
+  }, [supabase, book.id, posicoes]);
+
+  const agendarSalvar = useCallback(() => {
+    if (salvarRef.current) clearTimeout(salvarRef.current);
+    else setSalvo(false); // uma vez por rajada, não a cada evento de rolagem
+    pendente.current = true;
+    salvarRef.current = setTimeout(() => {
+      void gravar().then(() => setSalvo(true));
+    }, 900);
+  }, [gravar]);
+
+  // Sair da tela (voltar pra estante) ou trocar de app com gravação pendente não pode
+  // perder a posição — grava na hora em vez de esperar o tempo do debounce.
+  useEffect(() => {
+    const aoEsconder = () => {
+      if (document.visibilityState === "hidden" && pendente.current) void gravar();
+    };
+    const aoFechar = () => {
+      if (pendente.current) void gravar();
+    };
+    document.addEventListener("visibilitychange", aoEsconder);
+    window.addEventListener("pagehide", aoFechar);
+    return () => {
+      document.removeEventListener("visibilitychange", aoEsconder);
+      window.removeEventListener("pagehide", aoFechar);
+      aoFechar();
+    };
+  }, [gravar]);
+
+  // Rolagem: anota a posição da página atual e agenda a gravação.
+  useEffect(() => {
+    let quadro = 0;
+    const aoRolar = () => {
+      if (restaurando.current || quadro) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = 0;
+        posicoes.set(paginaRef.current, fracaoAtual());
+        agendarSalvar();
+      });
+    };
+    window.addEventListener("scroll", aoRolar, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", aoRolar);
+      if (quadro) cancelAnimationFrame(quadro);
+    };
+  }, [posicoes, agendarSalvar]);
+
   const primeiro = useRef(true);
   useEffect(() => {
     if (primeiro.current) {
       primeiro.current = false;
       return;
     }
-    setSalvo(false);
-    const t = setTimeout(async () => {
-      await executarOuEnfileirar(supabase, `last_page:${book.id}`, {
-        tipo: "last_page",
-        bookId: book.id,
-        page,
-        lastReadAt: new Date().toISOString(),
-      });
-      setSalvo(true);
-    }, 700);
-    return () => clearTimeout(t);
-  }, [page, book.id, supabase]);
-
-  // Onde o leitor estava em cada página já visitada, pra voltar sem se perder.
-  const posicoes = useRef(new Map<number, number>());
-  const aRestaurar = useRef<number | null>(null);
+    agendarSalvar();
+  }, [page, agendarSalvar]);
 
   const irPara = useCallback(
     (p: number) => {
       const max = numPages || p;
       const alvo = Math.min(Math.max(1, p), max);
       if (alvo === page) return;
-      posicoes.current.set(page, window.scrollY);
-      aRestaurar.current = posicoes.current.get(alvo) ?? 0;
+      if (!restaurando.current) posicoes.set(page, fracaoAtual());
+      aRestaurar.current = posicoes.get(alvo) ?? 0;
+      restaurando.current = true;
       setPage(alvo);
     },
-    [numPages, page],
+    [numPages, page, posicoes],
   );
 
   /**
    * Devolve o leitor à altura em que ele estava naquela página.
    *
-   * Não dá pra rolar de imediato: o conteúdo da página nova ainda está sendo
-   * montado (renderização do PDF ou remontagem do texto) e a página ainda é curta
-   * demais — rolar agora pararia no meio do caminho. Então espera a altura crescer
-   * o bastante, quadro a quadro, e desiste depois de ~1s pra não ficar tentando à toa.
+   * Não dá pra rolar de imediato: o conteúdo da página nova ainda está sendo montado
+   * (renderização do PDF ou remontagem do texto) e o documento ainda é curto demais —
+   * rolar agora pararia no meio do caminho. Então espera a altura parar de mudar por
+   * alguns quadros, e desiste depois de ~1,5s pra não ficar tentando à toa.
    */
   useEffect(() => {
     const destino = aRestaurar.current;
     aRestaurar.current = null;
-    if (destino === null) return;
-
-    if (destino <= 0) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    if (destino === null) {
+      restaurando.current = false;
       return;
     }
+    // De novo aqui porque a limpeza do efeito anterior baixa a bandeira antes deste
+    // rodar — sem isto, a rolagem do meio do caminho gravaria posição errada.
+    restaurando.current = true;
 
     let cancelado = false;
     let tentativas = 0;
+    let anterior = -1;
+    let estaveis = 0;
+
+    const concluir = (topo: number) => {
+      window.scrollTo({ top: topo });
+      restaurando.current = false;
+    };
+
     const tentar = () => {
       if (cancelado) return;
       const limite = document.documentElement.scrollHeight - window.innerHeight;
-      if (limite >= destino || tentativas > 60) {
-        window.scrollTo({ top: Math.max(0, Math.min(destino, limite)) });
+      if (limite > 0 && limite === anterior) estaveis++;
+      else {
+        estaveis = 0;
+        anterior = limite;
+      }
+      if (estaveis >= 3 || tentativas > 90) {
+        concluir(Math.round(destino * Math.max(0, limite)));
         return;
       }
       tentativas++;
       requestAnimationFrame(tentar);
     };
-    tentar();
+
+    if (destino <= 0) {
+      concluir(0);
+    } else {
+      tentar();
+    }
 
     return () => {
       cancelado = true;
+      restaurando.current = false;
     };
   }, [page]);
-
-  // Trocar de modo muda a altura da página inteira — a altura guardada não vale mais.
-  useEffect(() => {
-    posicoes.current.clear();
-  }, [modo]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

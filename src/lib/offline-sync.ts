@@ -9,10 +9,14 @@ type Supabase = ReturnType<typeof createClient>;
 async function executar(supabase: Supabase, op: OpFila): Promise<void> {
   switch (op.tipo) {
     case "last_page": {
-      const { error } = await supabase
-        .from("books")
-        .update({ last_page: op.page, last_read_at: op.lastReadAt })
-        .eq("id", op.bookId);
+      const campos: Record<string, unknown> = {
+        last_page: op.page,
+        last_read_at: op.lastReadAt,
+      };
+      // Só manda se veio: item antigo da fila não tem esse campo, e escrever
+      // `undefined` apagaria as posições já guardadas.
+      if (op.positions) campos.positions = op.positions;
+      const { error } = await supabase.from("books").update(campos).eq("id", op.bookId);
       if (error) throw error;
       return;
     }
