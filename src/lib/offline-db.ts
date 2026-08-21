@@ -131,7 +131,14 @@ export async function obterSnapshotEstante(): Promise<Book[] | undefined> {
 /* ============================================== Fila de sincronização */
 
 export type OpFila =
-  | { tipo: "last_page"; bookId: string; page: number; lastReadAt: string }
+  | {
+      tipo: "last_page";
+      bookId: string;
+      page: number;
+      lastReadAt: string;
+      /** Opcional: item enfileirado por uma versão antiga do app não tem esse campo. */
+      positions?: Record<string, number>;
+    }
   | { tipo: "highlight_add"; row: Record<string, unknown> }
   | { tipo: "highlight_del"; id: string }
   | { tipo: "bookmark_add"; row: Record<string, unknown> }

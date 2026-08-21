@@ -48,6 +48,11 @@ export type Book = {
   size_bytes: number | null;
   total_pages: number | null;
   last_page: number;
+  /**
+   * Onde a leitura parou em cada página: `{ "12": 0.42 }` = 42% da rolagem.
+   * Fração, e não pixel, pra mesma posição valer no computador e no celular.
+   */
+  positions: Record<string, number> | null;
   last_read_at: string | null;
   created_at: string;
 };

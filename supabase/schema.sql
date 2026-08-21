@@ -15,9 +15,15 @@ create table if not exists public.books (
   size_bytes    bigint,
   total_pages   int,
   last_page     int  not null default 1,
+  -- positions: { "<página>": <fração 0..1 da rolagem> } — onde a leitura parou em cada
+  -- página. Fração, e não pixel, pra valer no computador e no celular do mesmo jeito.
+  positions     jsonb not null default '{}'::jsonb,
   last_read_at  timestamptz,
   created_at    timestamptz not null default now()
 );
+
+-- coluna nova em bancos já existentes (a criação acima só roda em banco vazio)
+alter table public.books add column if not exists positions jsonb not null default '{}'::jsonb;
 
 create index if not exists books_user_idx on public.books (user_id, created_at desc);
 
