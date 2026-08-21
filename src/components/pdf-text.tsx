@@ -5,6 +5,7 @@ import { Trash2, X } from "lucide-react";
 import { abrirDoc } from "@/lib/pdf";
 import { CachePaginas } from "@/lib/pdf-cache";
 import { extrairBlocos, type Bloco } from "@/lib/pdf-text";
+import type { Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
 import { BarraProgresso, Botao } from "@/components/ui";
 import {
@@ -275,7 +276,13 @@ export default function PdfText({
             </div>
           );
         }
-        const conteudo = fatiarTexto(b.texto, i, highlights, ativa?.highlight.id ?? null);
+        const conteudo = fatiarTexto(
+          b.texto,
+          i,
+          highlights,
+          ativa?.highlight.id ?? null,
+          b.tipo === "paragrafo" || b.tipo === "citacao" ? b.negrito : [],
+        );
         if (b.tipo === "codigo") {
           return (
             <pre key={i} data-bloco={i}>
@@ -350,34 +357,44 @@ export default function PdfText({
 
 /* ---------------------------------------------------------------- */
 
-/** Fatia o texto do bloco nos trechos marcados, envolvendo cada um num <mark>. */
+/**
+ * Fatia o texto do bloco nos trechos marcados (<mark>) e em destaque (<strong>).
+ *
+ * Os dois se sobrepõem à vontade — marcar metade de uma palavra em negrito é
+ * normal —, então o corte é feito em todos os limites de uma vez e cada pedaço
+ * recebe o que valer nele.
+ */
 function fatiarTexto(
   texto: string,
   indice: number,
   highlights: Highlight[],
   ativaId: string | null,
+  negrito: Faixa[] = [],
 ): React.ReactNode {
+  const dentro = (f: Faixa) => ({
+    start: Math.max(0, Math.min(texto.length, f.start)),
+    end: Math.max(0, Math.min(texto.length, f.end)),
+  });
+
   const trechos = highlights
     .flatMap((h) =>
       h.spans
         .filter((s) => s.bloco === indice)
         .map((s) => ({ ...s, id: h.id, color: h.color })),
     )
-    .map((t) => ({
-      ...t,
-      start: Math.max(0, Math.min(texto.length, t.start)),
-      end: Math.max(0, Math.min(texto.length, t.end)),
-    }))
+    .map((t) => ({ ...t, ...dentro(t) }))
     .filter((t) => t.start < t.end)
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
-  if (!trechos.length) return texto;
+  const fortes = negrito.map(dentro).filter((f) => f.start < f.end);
+
+  if (!trechos.length && !fortes.length) return texto;
 
   const pontos = new Set<number>([0, texto.length]);
-  trechos.forEach((t) => {
-    pontos.add(t.start);
-    pontos.add(t.end);
-  });
+  for (const f of [...trechos, ...fortes]) {
+    pontos.add(f.start);
+    pontos.add(f.end);
+  }
   const cortes = [...pontos].sort((a, b) => a - b);
 
   const nos: React.ReactNode[] = [];
@@ -386,6 +403,8 @@ function fatiarTexto(
     const fim = cortes[i + 1];
     if (ini >= fim) continue;
     const sub = texto.slice(ini, fim);
+    const forte = fortes.some((f) => f.start <= ini && f.end >= fim);
+    const conteudo = forte ? <strong>{sub}</strong> : sub;
     const cobre = trechos.find((t) => t.start <= ini && t.end >= fim);
     if (cobre) {
       nos.push(
@@ -396,9 +415,11 @@ function fatiarTexto(
           className="txt-mark"
           style={{ background: fill(cobre.color) }}
         >
-          {sub}
+          {conteudo}
         </mark>,
       );
+    } else if (forte) {
+      nos.push(<strong key={ini}>{sub}</strong>);
     } else {
       nos.push(sub);
     }
