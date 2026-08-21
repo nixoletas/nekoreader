@@ -247,11 +247,22 @@ export default function PdfText({
           );
         }
         const conteudo = fatiarTexto(b.texto, i, highlights, ativa?.highlight.id ?? null);
-        return b.tipo === "titulo" ? (
-          <h2 key={i} data-bloco={i}>
-            {conteudo}
-          </h2>
-        ) : (
+        if (b.tipo === "titulo") {
+          const Cabecalho = (["h1", "h2", "h3"] as const)[b.nivel - 1];
+          return (
+            <Cabecalho key={i} data-bloco={i}>
+              {conteudo}
+            </Cabecalho>
+          );
+        }
+        if (b.tipo === "citacao") {
+          return (
+            <blockquote key={i} data-bloco={i}>
+              {conteudo}
+            </blockquote>
+          );
+        }
+        return (
           <p key={i} data-bloco={i}>
             {conteudo}
           </p>
