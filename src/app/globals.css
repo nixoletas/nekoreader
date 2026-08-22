@@ -144,6 +144,21 @@ body {
   font-style: italic;
 }
 
+/* Endereço citado no texto ou na nota: sublinhado discreto, que só encorpa no
+   toque/hover. Quebra em qualquer ponto pra URL comprida não estourar a coluna. */
+.leitura .elo {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 0.18em;
+  overflow-wrap: anywhere;
+}
+
+.leitura .elo:hover,
+.leitura .elo:focus-visible {
+  text-decoration-color: currentColor;
+}
+
 /* ---------- nota de rodapé ---------- */
 /* O filete só aparece na primeira nota da página: as seguintes se encostam nela
    como um bloco só, do jeito que o rodapé é impresso. */
@@ -339,8 +354,25 @@ body {
   animation: sobe 0.25s ease-out both;
 }
 
+/* Virada de página: o conteúdo novo entra em vez de aparecer estalado. */
+@keyframes folha-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.folha {
+  animation: folha-entra 0.22s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .sobe {
+  .sobe,
+  .folha {
     animation: none;
   }
 }

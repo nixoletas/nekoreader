@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
-import type { Bloco, Faixa } from "@/lib/pdf-blocos";
+import type { Bloco, Elo, Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
 import { BarraProgresso, Botao } from "@/components/ui";
 import {
@@ -123,6 +123,10 @@ export default function LeitorTexto({
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
 
+      // Tocar num endereço é abrir o endereço. Sem isto, um link dentro de um
+      // trecho marcado abriria o link e o balão de apagar a marcação de uma vez.
+      if ((e.target as HTMLElement).closest("a[href]")) return;
+
       const artigoEl = artigoRef.current;
       const alvoEl = (e.target as HTMLElement).closest<HTMLElement>(
         "[data-highlight-id]",
@@ -200,6 +204,10 @@ export default function LeitorTexto({
       className="leitura relative mx-auto max-w-[38rem] lg:max-w-[44rem] xl:max-w-[50rem] rounded-lg bg-surface px-5 py-8 shadow-[0_1px_2px_rgba(60,45,25,0.06),0_16px_40px_-28px_rgba(60,45,25,0.5)] sm:px-9 sm:py-11"
       style={{ fontSize: `${escala}rem` }}
     >
+      {/* A chave troca a cada página/capítulo, e é isso que faz a animação de
+          entrada rodar de novo. Transform não mexe em layout nem em scrollHeight,
+          então isso não atrapalha a volta pra posição onde a leitura parou. */}
+      <div key={chave} className="folha">
       {blocos.map((b, i) => {
         if (b.tipo === "imagem") {
           return (
@@ -251,6 +259,7 @@ export default function LeitorTexto({
           ativa?.highlight.id ?? null,
           comEstilo ? b.negrito : [],
           comEstilo ? b.italico : [],
+          comEstilo ? b.links : [],
         );
         if (b.tipo === "codigo") {
           return (
@@ -287,6 +296,7 @@ export default function LeitorTexto({
           </p>
         );
       })}
+      </div>
 
       {pending && (
         <Popover x={pending.x} y={pending.y} h={pending.h}>
@@ -349,6 +359,7 @@ function fatiarTexto(
   ativaId: string | null,
   negrito: Faixa[] = [],
   italico: Faixa[] = [],
+  links: Elo[] = [],
 ): React.ReactNode {
   const dentro = (f: Faixa) => ({
     start: Math.max(0, Math.min(texto.length, f.start)),
@@ -367,11 +378,16 @@ function fatiarTexto(
 
   const fortes = negrito.map(dentro).filter((f) => f.start < f.end);
   const inclinados = italico.map(dentro).filter((f) => f.start < f.end);
+  const enderecos = links
+    .map((l) => ({ ...l, ...dentro(l) }))
+    .filter((l) => l.start < l.end);
 
-  if (!trechos.length && !fortes.length && !inclinados.length) return texto;
+  if (!trechos.length && !fortes.length && !inclinados.length && !enderecos.length) {
+    return texto;
+  }
 
   const pontos = new Set<number>([0, texto.length]);
-  for (const f of [...trechos, ...fortes, ...inclinados]) {
+  for (const f of [...trechos, ...fortes, ...inclinados, ...enderecos]) {
     pontos.add(f.start);
     pontos.add(f.end);
   }
@@ -384,11 +400,25 @@ function fatiarTexto(
     if (ini >= fim) continue;
     const cobre = (f: Faixa) => f.start <= ini && f.end >= fim;
 
-    // De dentro pra fora: o texto ganha primeiro o itálico, depois o negrito, e
-    // por último o véu da marcação — que precisa ficar por fora pra pintar tudo.
+    // De dentro pra fora: itálico, negrito, o link, e por último o véu da
+    // marcação — que precisa ficar por fora pra pintar tudo o que está dentro.
     let conteudo: React.ReactNode = texto.slice(ini, fim);
     if (inclinados.some(cobre)) conteudo = <em>{conteudo}</em>;
     if (fortes.some(cobre)) conteudo = <strong>{conteudo}</strong>;
+
+    const endereco = enderecos.find(cobre);
+    if (endereco) {
+      conteudo = (
+        <a
+          href={endereco.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="elo"
+        >
+          {conteudo}
+        </a>
+      );
+    }
 
     const marcado = trechos.find(cobre);
     if (marcado) {

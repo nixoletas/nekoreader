@@ -9,13 +9,16 @@
 /** Trecho do texto do bloco, em índice de caractere. */
 export type Faixa = { start: number; end: number };
 
+/** Trecho que é um endereço clicável. */
+export type Elo = Faixa & { href: string };
+
 /** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <pre>, <table> ou <img>. */
 export type Bloco =
   | { tipo: "titulo"; nivel: 1 | 2 | 3; texto: string }
-  | { tipo: "paragrafo"; texto: string; negrito: Faixa[]; italico: Faixa[] }
-  | { tipo: "citacao"; texto: string; negrito: Faixa[]; italico: Faixa[] }
+  | { tipo: "paragrafo"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
+  | { tipo: "citacao"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
   /** Nota de rodapé: mesmo texto corrido, só que em corpo menor e no pé da página. */
-  | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[] }
+  | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
   | { tipo: "codigo"; texto: string }
   | { tipo: "tabela"; linhas: string[][] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
@@ -560,7 +563,74 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
 
   // Título já é destacado por inteiro; marcar de novo por dentro seria redundante.
   if (classe.tipo === "titulo") return { tipo: "titulo", nivel: classe.nivel, texto };
-  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito, italico };
-  if (classe.tipo === "nota") return { tipo: "nota", texto, negrito, italico };
-  return { tipo: "paragrafo", texto, negrito, italico };
+
+  // O PDF guarda o endereço como texto comum; quem transforma em link é a leitura
+  // do próprio texto. (No EPUB o <a href> vem escrito, e é ele que vale.)
+  const links = acharLinks(texto);
+  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito, italico, links };
+  if (classe.tipo === "nota") return { tipo: "nota", texto, negrito, italico, links };
+  return { tipo: "paragrafo", texto, negrito, italico, links };
+}
+
+/**
+ * Endereços escritos no meio do texto — típico de nota de rodapé e bibliografia.
+ *
+ * `www.` e e-mail entram junto porque livro impresso escreve dos três jeitos.
+ */
+const PADRAO_LINK =
+  /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*|[^\s<>"'@]+@[^\s<>"'@]+\.[a-z]{2,})/gi;
+
+export function acharLinks(texto: string): Elo[] {
+  const elos: Elo[] = [];
+
+  for (const achado of texto.matchAll(PADRAO_LINK)) {
+    const inicio = achado.index ?? 0;
+    const bruto = achado[0];
+    const cru = aparar(bruto);
+    if (cru.length < 6) continue;
+
+    const href = cru.includes("@") && !/^[a-z]+:/i.test(cru)
+      ? `mailto:${cru}`
+      : /^https?:\/\//i.test(cru)
+        ? cru
+        : `https://${cru}`;
+    elos.push({ start: inicio, end: inicio + cru.length, href });
+  }
+
+  return elos;
+}
+
+/**
+ * Tira a pontuação que encosta no fim do endereço.
+ *
+ * "https://oreil.ly/LFT4d." acaba a frase — o ponto é do texto, não da URL. Mas
+ * parêntese e colchete só saem se não tiverem par aberto dentro do endereço, que
+ * é comum em link de wiki.
+ */
+function aparar(bruto: string): string {
+  let s = bruto;
+  for (;;) {
+    const ultimo = s[s.length - 1];
+    if (!ultimo) break;
+    if (".,;:!?'\"".includes(ultimo)) {
+      s = s.slice(0, -1);
+      continue;
+    }
+    if ((ultimo === ")" || ultimo === "]") && !temParAberto(s, ultimo)) {
+      s = s.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  return s;
+}
+
+function temParAberto(s: string, fecha: string): boolean {
+  const abre = fecha === ")" ? "(" : "[";
+  let saldo = 0;
+  for (const c of s) {
+    if (c === abre) saldo++;
+    else if (c === fecha) saldo--;
+  }
+  return saldo >= 0;
 }
