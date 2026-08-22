@@ -26,6 +26,14 @@ async function executar(supabase: Supabase, op: OpFila): Promise<void> {
       if (error && error.code !== "23505") throw error;
       return;
     }
+    case "highlight_title": {
+      const { error } = await supabase
+        .from("highlights")
+        .update({ title: op.title })
+        .eq("id", op.id);
+      if (error) throw error;
+      return;
+    }
     case "highlight_del": {
       const { error } = await supabase.from("highlights").delete().eq("id", op.id);
       if (error) throw error;
@@ -88,6 +96,9 @@ export async function mesclarFilaLocal(
         if (row.book_id === bookId && !hl.some((h) => h.id === row.id)) hl = [...hl, row];
         break;
       }
+      case "highlight_title":
+        hl = hl.map((h) => (h.id === op.id ? { ...h, title: op.title } : h));
+        break;
       case "highlight_del":
         hl = hl.filter((h) => h.id !== op.id);
         break;

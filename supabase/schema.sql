@@ -33,6 +33,8 @@ create table if not exists public.highlights (
   user_id     uuid not null references auth.users (id) on delete cascade,
   page        int  not null,
   text        text,
+  -- título dado pela pessoa à marcação (opcional)
+  title       text,
   color       text not null default 'yellow',
   -- modo em que a marcação foi feita: 'pagina' (imagem do pdf) ou 'texto' (remontado)
   mode        text not null default 'pagina',
@@ -47,6 +49,8 @@ create table if not exists public.highlights (
 alter table public.highlights add column if not exists mode text not null default 'pagina';
 alter table public.highlights add column if not exists spans jsonb not null default '[]'::jsonb;
 alter table public.highlights alter column rects set default '[]'::jsonb;
+-- título dado pela pessoa à marcação (opcional)
+alter table public.highlights add column if not exists title text;
 
 create index if not exists highlights_book_idx on public.highlights (book_id, page);
 

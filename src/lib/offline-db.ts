@@ -140,6 +140,7 @@ export type OpFila =
       positions?: Record<string, number>;
     }
   | { tipo: "highlight_add"; row: Record<string, unknown> }
+  | { tipo: "highlight_title"; id: string; title: string | null }
   | { tipo: "highlight_del"; id: string }
   | { tipo: "bookmark_add"; row: Record<string, unknown> }
   | { tipo: "bookmark_del"; id: string };

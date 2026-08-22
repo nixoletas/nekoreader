@@ -63,6 +63,8 @@ export type Highlight = {
   user_id: string;
   page: number;
   text: string | null;
+  /** Título dado pela pessoa à marcação — opcional. */
+  title: string | null;
   color: HighlightColor;
   mode: HighlightMode;
   /** Usado no modo página — vazio no modo texto. */

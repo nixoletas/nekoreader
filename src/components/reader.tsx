@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlignLeft,
@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Highlighter,
   Minus,
+  Pencil,
   Plus,
+  ScrollText,
   Trash2,
   X,
 } from "lucide-react";
@@ -24,6 +26,7 @@ import { executarOuEnfileirar, mesclarFilaLocal, sincronizarFila } from "@/lib/o
 import { useFilaPendente, useOnline } from "@/lib/use-offline";
 import { usePreferencia } from "@/lib/prefs";
 import { Botao } from "@/components/ui";
+import { usePrompt } from "@/components/dialog-provider";
 import {
   swatch,
   type Book,
@@ -191,6 +194,7 @@ function ReaderCarregado({
   initialBookmarks: Bookmark[];
 }) {
   const [supabase] = useState(createClient);
+  const perguntar = usePrompt();
 
   // Arquivo do livro: se já foi baixado pra leitura offline, lê o blob local (funciona
   // sem internet e evita gastar rede à toa); senão pede a URL assinada de sempre.
@@ -232,7 +236,14 @@ function ReaderCarregado({
   }, [online, supabase]);
 
   const [numPages, setNumPages] = useState(book.total_pages ?? 0);
-  const [page, setPage] = useState(Math.max(1, book.last_page || 1));
+  // `?p=N` (vindo da página de marcações) manda pra página do trecho; sem ele,
+  // abre onde a leitura parou.
+  const paginaPedida = Number(useSearchParams().get("p"));
+  const [page, setPage] = useState(
+    Number.isFinite(paginaPedida) && paginaPedida >= 1
+      ? paginaPedida
+      : Math.max(1, book.last_page || 1),
+  );
   const [zoom, setZoom] = useState(1);
   const [highlights, setHighlights] = useState<Highlight[]>(initialHighlights);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
@@ -284,9 +295,7 @@ function ReaderCarregado({
   }, [page]);
 
   // Reabrir o livro cai direto onde a leitura parou (inclusive vindo de outro aparelho).
-  const [fracaoInicial] = useState(
-    () => posicoes.get(Math.max(1, book.last_page || 1)) ?? null,
-  );
+  const [fracaoInicial] = useState(() => posicoes.get(page) ?? null);
   const aRestaurar = useRef<number | null>(fracaoInicial);
   // Enquanto está reposicionando, os eventos de rolagem não valem: a página ainda
   // está curta e gravariam 0 por cima da posição boa.
@@ -472,6 +481,7 @@ function ReaderCarregado({
       user_id: book.user_id,
       page,
       text: text.slice(0, 2000),
+      title: null,
       color,
       mode: sel.mode,
       rects: sel.mode === "pagina" ? sel.rects : [],
@@ -504,6 +514,27 @@ function ReaderCarregado({
   async function delHighlight(id: string) {
     setHighlights((h) => h.filter((x) => x.id !== id));
     await executarOuEnfileirar(supabase, `del:${id}`, { tipo: "highlight_del", id });
+  }
+
+  async function renomearHighlight(id: string) {
+    const atual = highlights.find((h) => h.id === id);
+    if (!atual) return;
+    const resposta = await perguntar({
+      titulo: atual.title ? "Renomear marcação" : "Dar um título à marcação",
+      mensagem: atual.text ? `“${atual.text.slice(0, 120)}…”` : undefined,
+      valor: atual.title ?? "",
+      placeholder: "Ex.: definição de metadados",
+      textoConfirmar: "Salvar",
+    });
+    if (resposta === null) return;
+
+    const title = resposta.trim() || null;
+    setHighlights((h) => h.map((x) => (x.id === id ? { ...x, title } : x)));
+    await executarOuEnfileirar(supabase, `titulo:${id}`, {
+      tipo: "highlight_title",
+      id,
+      title,
+    });
   }
 
   async function delBookmark(id: string) {
@@ -541,7 +572,9 @@ function ReaderCarregado({
         setSheet(null);
       }}
       onDelHighlight={delHighlight}
+      onRenomear={renomearHighlight}
       onDelBookmark={delBookmark}
+      livroId={book.id}
     />
   );
 
@@ -933,7 +966,9 @@ function Painel({
   bookmarks,
   onIr,
   onDelHighlight,
+  onRenomear,
   onDelBookmark,
+  livroId,
 }: {
   aba: Aba;
   setAba: (a: Aba) => void;
@@ -941,7 +976,9 @@ function Painel({
   bookmarks: Bookmark[];
   onIr: (p: number) => void;
   onDelHighlight: (id: string) => void;
+  onRenomear: (id: string) => void;
   onDelBookmark: (id: string) => void;
+  livroId: string;
 }) {
   return (
     <>
@@ -974,7 +1011,15 @@ function Painel({
               cor.
             </Vazio>
           ) : (
-            <ul className="divide-y divide-border">
+            <>
+              <Link
+                href={`/livro/${livroId}/marcacoes`}
+                className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-sm font-medium text-accent transition hover:bg-background"
+              >
+                <ScrollText className="h-4 w-4 shrink-0" aria-hidden />
+                Ler todas em página inteira
+              </Link>
+              <ul className="divide-y divide-border">
               {highlights.map((h) => (
                 <li key={h.id} className="flex gap-2 p-3 active:bg-background">
                   <span
@@ -988,20 +1033,36 @@ function Painel({
                     <span className="text-[11px] uppercase tracking-wider text-muted">
                       página {h.page}
                     </span>
+                    {h.title && (
+                      <p className="display mt-0.5 text-[13px] leading-snug">
+                        {h.title}
+                      </p>
+                    )}
                     <p className="mt-0.5 line-clamp-4 text-sm leading-snug">
                       {h.text || "(trecho sem texto)"}
                     </p>
                   </button>
-                  <button
-                    onClick={() => onDelHighlight(h.id)}
-                    aria-label="Apagar marcação"
-                    className="tap !min-h-9 !min-w-9 shrink-0 self-start rounded-lg text-muted transition hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </button>
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      onClick={() => onRenomear(h.id)}
+                      aria-label={h.title ? "Renomear marcação" : "Dar um título"}
+                      title={h.title ? "Renomear marcação" : "Dar um título"}
+                      className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-accent"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden />
+                    </button>
+                    <button
+                      onClick={() => onDelHighlight(h.id)}
+                      aria-label="Apagar marcação"
+                      className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )
         ) : bookmarks.length === 0 ? (
           <Vazio>

@@ -212,6 +212,17 @@ body {
   white-space: nowrap;
 }
 
+/* ---------- trecho marcado, na página de marcações ---------- */
+
+.trecho {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+  padding-left: 1.1em;
+  border-left: 2px solid var(--line);
+}
+
 /* ---------- alvos de toque ---------- */
 
 .tap {
