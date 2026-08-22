@@ -51,7 +51,7 @@ export function Botao({
   );
 }
 
-/** Barra de progresso 0–100%, usada enquanto o PDF é baixado pela primeira vez. */
+/** Barra de progresso 0–100%, usada enquanto o livro é baixado pela primeira vez. */
 export function BarraProgresso({ texto, pct }: { texto: string; pct: number }) {
   return (
     <div className="mx-auto mb-5 flex w-40 flex-col items-center gap-1.5">

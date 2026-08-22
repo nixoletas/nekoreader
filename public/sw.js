@@ -16,6 +16,7 @@ const ESTATICOS = [
 // o mesmo casco em cache, em vez de só funcionar offline pro último livro visitado.
 const CASCO_ESTANTE = "/";
 const CASCO_LIVRO = "/__casco/livro";
+const CASCO_MARCACOES = "/__casco/marcacoes";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -56,7 +57,11 @@ function cacheavel(url) {
 /** null = rota sem casco offline (login etc.) — passa direto pra rede, sem cache. */
 function chaveDoCasco(pathname) {
   if (pathname === "/") return CASCO_ESTANTE;
-  if (pathname.startsWith("/livro/")) return CASCO_LIVRO;
+  if (pathname.startsWith("/livro/")) {
+    // Telas diferentes, cascos diferentes: sem isto a página de marcações seria
+    // guardada por cima da do leitor e voltaria no lugar dela offline.
+    return pathname.endsWith("/marcacoes") ? CASCO_MARCACOES : CASCO_LIVRO;
+  }
   return null;
 }
 

@@ -38,10 +38,23 @@ export function swatch(c: string): string {
   return HIGHLIGHT_SWATCH[c as HighlightColor] ?? HIGHLIGHT_SWATCH.yellow;
 }
 
+/** Formato do arquivo. No EPUB, "página" quer dizer capítulo. */
+export type BookFormat = "pdf" | "epub";
+
+/** O que o envio precisa saber sobre um arquivo antes de guardá-lo na estante. */
+export type Inspecao = {
+  totalPages: number;
+  cover: Blob | null;
+  /** O EPUB traz escrito; no PDF vem nulo e sobra o nome do arquivo. */
+  title: string | null;
+  author: string | null;
+};
+
 export type Book = {
   id: string;
   user_id: string;
   title: string;
+  format: BookFormat;
   author: string | null;
   storage_path: string;
   cover_path: string | null;
@@ -63,6 +76,8 @@ export type Highlight = {
   user_id: string;
   page: number;
   text: string | null;
+  /** Título dado pela pessoa à marcação — opcional. */
+  title: string | null;
   color: HighlightColor;
   mode: HighlightMode;
   /** Usado no modo página — vazio no modo texto. */
