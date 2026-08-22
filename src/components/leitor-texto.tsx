@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Bloco, Elo, Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
@@ -18,6 +18,9 @@ type Pending = { spans: TextSpan[]; text: string; x: number; y: number; h: numbe
 type Ativa = { highlight: Highlight; x: number; y: number; h: number };
 
 const CORES: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
+/** Quanto a seleção precisa ficar parada antes do balão aparecer, em ms. */
+const ESPERA_SELECAO = 180;
 
 /**
  * Libera os object URL das imagens de um conjunto de blocos.
@@ -86,37 +89,63 @@ export default function LeitorTexto({
     setAtiva(null);
   }
 
-  const handlePointerUp = useCallback(() => {
+  /** Lê a seleção atual e põe (ou tira) o balão de cores. */
+  const lerSelecao = useCallback(() => {
     const artigoEl = artigoRef.current;
-    if (!artigoEl) return;
     const sel = window.getSelection();
 
-    if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      if (artigoEl.contains(range.commonAncestorContainer)) {
-        const spans = capturarSpans(artigoEl, range);
-        const texto = sel.toString().replace(/\s+/g, " ").trim();
-        if (spans.length && texto) {
-          const base = artigoEl.getBoundingClientRect();
-          const rects = Array.from(range.getClientRects()).filter(
-            (r) => r.width > 1 && r.height > 1,
-          );
-          const r = rects[0] ?? range.getBoundingClientRect();
-          setAtiva(null);
-          setPending({
-            spans,
-            text: texto,
-            x: r.left + r.width / 2 - base.left,
-            y: r.top - base.top,
-            h: r.height,
-          });
-          return;
-        }
-      }
+    if (!artigoEl || !sel || sel.isCollapsed || sel.rangeCount === 0) {
+      setPending(null);
+      return;
     }
 
-    setPending(null);
+    const range = sel.getRangeAt(0);
+    if (!artigoEl.contains(range.commonAncestorContainer)) {
+      setPending(null);
+      return;
+    }
+
+    const spans = capturarSpans(artigoEl, range);
+    const texto = sel.toString().replace(/\s+/g, " ").trim();
+    if (!spans.length || !texto) {
+      setPending(null);
+      return;
+    }
+
+    const base = artigoEl.getBoundingClientRect();
+    const r = primeiroRetangulo(range);
+    setAtiva(null);
+    setPending({
+      spans,
+      text: texto,
+      x: r.left + r.width / 2 - base.left,
+      y: r.top - base.top,
+      h: r.height,
+    });
   }, []);
+
+  /**
+   * O balão segue a seleção, em vez de aparecer só quando o dedo levanta.
+   *
+   * No celular a seleção continua se ajustando depois do `pointerup` — a pessoa
+   * arrasta as alcinhas pra esticar o trecho. Ouvindo `selectionchange` com uma
+   * pausa curta, o balão espera a seleção assentar e depois se posiciona onde ela
+   * de fato terminou.
+   */
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const aoMudar = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(lerSelecao, ESPERA_SELECAO);
+    };
+
+    document.addEventListener("selectionchange", aoMudar);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("selectionchange", aoMudar);
+    };
+  }, [lerSelecao]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -199,15 +228,10 @@ export default function LeitorTexto({
     <article
       ref={artigoRef}
       {...swipe}
-      onPointerUp={handlePointerUp}
       onClick={handleClick}
       className="leitura relative mx-auto max-w-[38rem] lg:max-w-[44rem] xl:max-w-[50rem] rounded-lg bg-surface px-5 py-8 shadow-[0_1px_2px_rgba(60,45,25,0.06),0_16px_40px_-28px_rgba(60,45,25,0.5)] sm:px-9 sm:py-11"
       style={{ fontSize: `${escala}rem` }}
     >
-      {/* A chave troca a cada página/capítulo, e é isso que faz a animação de
-          entrada rodar de novo. Transform não mexe em layout nem em scrollHeight,
-          então isso não atrapalha a volta pra posição onde a leitura parou. */}
-      <div key={chave} className="folha">
       {blocos.map((b, i) => {
         if (b.tipo === "imagem") {
           return (
@@ -296,7 +320,6 @@ export default function LeitorTexto({
           </p>
         );
       })}
-      </div>
 
       {pending && (
         <Popover x={pending.x} y={pending.y} h={pending.h}>
@@ -411,8 +434,13 @@ function fatiarTexto(
       conteudo = (
         <a
           href={endereco.href}
+          // Abre fora da leitura — no PWA, numa aba/janela do navegador. Sem
+          // `noopener` a página aberta ganharia referência de volta pra esta.
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener noreferrer external"
+          // O toque no endereço não é toque no parágrafo: sem isto o leitor
+          // ainda tentaria abrir o balão da marcação junto.
+          onClick={(e) => e.stopPropagation()}
           className="elo"
         >
           {conteudo}
@@ -442,30 +470,75 @@ function fatiarTexto(
   return nos;
 }
 
-/** Converte uma seleção em spans por parágrafo — cada `[data-bloco]` tocado vira um trecho. */
+/**
+ * Converte uma seleção em trechos por bloco — cada `[data-bloco]` tocado vira um.
+ *
+ * O cuidado todo está em recortar a seleção **dentro** de cada bloco antes de
+ * medir. `intersectsNode` diz "sim" também pro bloco que a seleção apenas
+ * encosta: no celular, escolher uma palavra costuma deixar a ponta da seleção
+ * parada na borda do parágrafo seguinte, e sem o recorte esse parágrafo inteiro
+ * era marcado junto.
+ */
 function capturarSpans(artigoEl: HTMLElement, range: Range): TextSpan[] {
-  const blocosEls = Array.from(
-    artigoEl.querySelectorAll<HTMLElement>("[data-bloco]"),
-  ).filter((el) => range.intersectsNode(el));
-  if (!blocosEls.length) return [];
-
   const spans: TextSpan[] = [];
-  blocosEls.forEach((el, i) => {
-    const bloco = Number(el.dataset.bloco);
+
+  for (const el of Array.from(artigoEl.querySelectorAll<HTMLElement>("[data-bloco]"))) {
+    if (!range.intersectsNode(el)) continue;
+
+    const pedaco = recortarNoBloco(range, el);
+    if (!pedaco) continue;
+
     const comprimento = el.textContent?.length ?? 0;
-    let start = 0;
-    let end = comprimento;
-    if (i === 0 && el.contains(range.startContainer)) {
-      start = offsetNoContainer(el, range.startContainer, range.startOffset);
-    }
-    if (i === blocosEls.length - 1 && el.contains(range.endContainer)) {
-      end = offsetNoContainer(el, range.endContainer, range.endOffset);
-    }
-    start = Math.max(0, Math.min(comprimento, start));
-    end = Math.max(start, Math.min(comprimento, end));
-    if (end > start) spans.push({ bloco, start, end });
-  });
+    const bruto = {
+      start: offsetNoContainer(el, pedaco.startContainer, pedaco.startOffset),
+      end: offsetNoContainer(el, pedaco.endContainer, pedaco.endOffset),
+    };
+    const start = Math.max(0, Math.min(comprimento, bruto.start));
+    const end = Math.max(start, Math.min(comprimento, bruto.end));
+    if (end > start) spans.push({ bloco: Number(el.dataset.bloco), start, end });
+  }
+
   return spans;
+}
+
+/** A parte da seleção que cai dentro deste bloco — `null` se ela só encosta na borda. */
+function recortarNoBloco(range: Range, el: HTMLElement): Range | null {
+  const inteiro = document.createRange();
+  inteiro.selectNodeContents(el);
+
+  const pedaco = range.cloneRange();
+  try {
+    if (pedaco.compareBoundaryPoints(Range.START_TO_START, inteiro) < 0) {
+      pedaco.setStart(inteiro.startContainer, inteiro.startOffset);
+    }
+    if (pedaco.compareBoundaryPoints(Range.END_TO_END, inteiro) > 0) {
+      pedaco.setEnd(inteiro.endContainer, inteiro.endOffset);
+    }
+  } catch {
+    return null;
+  }
+
+  // Recorte vazio (ou só espaço) quer dizer que a seleção passou raspando: não é
+  // trecho marcado nenhum.
+  return pedaco.collapsed || !pedaco.toString().trim() ? null : pedaco;
+}
+
+/**
+ * O retângulo mais acima (e mais à esquerda) da seleção — onde o balão ancora.
+ *
+ * A ordem que `getClientRects` devolve não é garantida entre navegadores, e
+ * confiar no primeiro da lista era o que podia jogar o balão pro fim do trecho.
+ */
+function primeiroRetangulo(range: Range): DOMRect {
+  const rects = Array.from(range.getClientRects()).filter(
+    (r) => r.width > 1 && r.height > 1,
+  );
+  if (!rects.length) return range.getBoundingClientRect();
+  return rects.reduce((melhor, r) =>
+    r.top < melhor.top - 1 || (Math.abs(r.top - melhor.top) <= 1 && r.left < melhor.left)
+      ? r
+      : melhor,
+  );
 }
 
 /** Nº de caracteres de texto entre o início de `containerEl` e o ponto (node, deslocamento). */

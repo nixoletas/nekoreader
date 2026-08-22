@@ -8,7 +8,14 @@ import { createClient } from "@/lib/supabase/client";
 import { obterSnapshotLivro } from "@/lib/offline-db";
 import { executarOuEnfileirar, mesclarFilaLocal } from "@/lib/offline-sync";
 import { usePrompt } from "@/components/dialog-provider";
-import { HIGHLIGHT_LABEL, swatch, type Book, type Highlight } from "@/lib/types";
+import BotaoTema from "@/components/botao-tema";
+import {
+  HIGHLIGHT_LABEL,
+  porMaisRecente,
+  swatch,
+  type Book,
+  type Highlight,
+} from "@/lib/types";
 
 /**
  * As marcações do livro em página inteira, pra ler de enfiada — o painel do leitor
@@ -55,7 +62,7 @@ export default function MarcacoesBlog() {
         [],
       );
       setBook(livro as Book);
-      setHighlights(ordenar(mesclado.highlights));
+      setHighlights(porMaisRecente(mesclado.highlights));
       setErro(null);
     } catch (e) {
       if (navigator.onLine) {
@@ -66,7 +73,7 @@ export default function MarcacoesBlog() {
       if (salvo) {
         const mesclado = await mesclarFilaLocal(bookId, salvo.highlights, []);
         setBook(salvo.book);
-        setHighlights(ordenar(mesclado.highlights));
+        setHighlights(porMaisRecente(mesclado.highlights));
         setErro(null);
       } else {
         setErro("Sem internet e este livro ainda não foi aberto neste aparelho.");
@@ -131,6 +138,7 @@ export default function MarcacoesBlog() {
           <span className="min-w-0 flex-1 truncate text-sm text-muted">
             {book?.title ?? "…"}
           </span>
+          <BotaoTema />
         </div>
       </header>
 
@@ -223,9 +231,4 @@ export default function MarcacoesBlog() {
   );
 }
 
-/** Página crescente; dentro da página, na ordem em que foram feitas. */
-function ordenar(hs: Highlight[]): Highlight[] {
-  return [...hs].sort(
-    (a, b) => a.page - b.page || a.created_at.localeCompare(b.created_at),
-  );
-}
+

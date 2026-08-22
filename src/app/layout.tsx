@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces } from "next/font/google";
 import SwRegister from "@/components/sw-register";
+import { SCRIPT_TEMA } from "@/lib/tema";
 import { DialogProvider } from "@/components/dialog-provider";
 import "./globals.css";
 
@@ -33,10 +34,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4eee2" },
-    { media: "(prefers-color-scheme: dark)", color: "#15120e" },
-  ],
+  // Sem `themeColor` aqui de propósito: quem cria e mantém essa meta é o script
+  // do tema, que sabe da escolha manual. Duas metas brigariam entre si.
 };
 
 export default function RootLayout({
@@ -44,6 +43,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" className={display.variable}>
+      <head>
+        {/* Antes da primeira pintura, pra página não nascer clara e piscar. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="antialiased">
         <DialogProvider>{children}</DialogProvider>
         <SwRegister />
