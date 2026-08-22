@@ -1,6 +1,7 @@
 "use client";
 
 import type { Book, Bookmark, Highlight } from "@/lib/types";
+import type { ItemSumario } from "@/lib/sumario";
 
 /**
  * Armazenamento local (IndexedDB) pra leitura offline: o PDF baixado de cada
@@ -10,11 +11,12 @@ import type { Book, Bookmark, Highlight } from "@/lib/types";
  */
 
 const DB_NOME = "marginalia-offline";
-const DB_VERSAO = 2;
+const DB_VERSAO = 3;
 const LOJA_PDFS = "pdfs";
 const LOJA_FILA = "fila";
 const LOJA_LIVROS = "livros";
 const LOJA_ESTANTE = "estante";
+const LOJA_SUMARIOS = "sumarios";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -35,6 +37,9 @@ function abrirDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(LOJA_ESTANTE)) {
         db.createObjectStore(LOJA_ESTANTE, { keyPath: "chave" });
+      }
+      if (!db.objectStoreNames.contains(LOJA_SUMARIOS)) {
+        db.createObjectStore(LOJA_SUMARIOS, { keyPath: "bookId" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -126,6 +131,43 @@ export async function obterSnapshotEstante(): Promise<Book[] | undefined> {
     >,
   );
   return dado?.books;
+}
+
+/* ================================================= Sumário do livro */
+
+/**
+ * Montar o sumário pode custar uma varredura no livro inteiro; guardar o
+ * resultado faz isso acontecer no máximo uma vez por livro. `versao` deixa
+ * invalidar tudo de uma vez quando a interpretação melhorar.
+ */
+export type SumarioGuardado = {
+  bookId: string;
+  versao: number;
+  itens: ItemSumario[];
+  atualizadoEm: number;
+};
+
+export const VERSAO_SUMARIO = 1;
+
+export async function salvarSumario(bookId: string, itens: ItemSumario[]): Promise<void> {
+  const db = await abrirDb();
+  const dado: SumarioGuardado = {
+    bookId,
+    versao: VERSAO_SUMARIO,
+    itens,
+    atualizadoEm: Date.now(),
+  };
+  await pedido(db.transaction(LOJA_SUMARIOS, "readwrite").objectStore(LOJA_SUMARIOS).put(dado));
+}
+
+export async function obterSumario(bookId: string): Promise<ItemSumario[] | undefined> {
+  const db = await abrirDb();
+  const dado = await pedido(
+    db.transaction(LOJA_SUMARIOS, "readonly").objectStore(LOJA_SUMARIOS).get(bookId) as IDBRequest<
+      SumarioGuardado | undefined
+    >,
+  );
+  return dado?.versao === VERSAO_SUMARIO ? dado.itens : undefined;
 }
 
 /* ============================================== Fila de sincronização */

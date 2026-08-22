@@ -15,6 +15,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  List,
   ScrollText,
   Trash2,
   X,
@@ -25,6 +26,7 @@ import { obterPdfOffline, obterSnapshotLivro, salvarSnapshotLivro } from "@/lib/
 import { executarOuEnfileirar, mesclarFilaLocal, sincronizarFila } from "@/lib/offline-sync";
 import { useFilaPendente, useOnline } from "@/lib/use-offline";
 import { usePreferencia } from "@/lib/prefs";
+import { useSumario, type EstadoSumario } from "@/lib/use-sumario";
 import { Botao } from "@/components/ui";
 import { usePrompt } from "@/components/dialog-provider";
 import {
@@ -51,7 +53,7 @@ const PdfText = dynamic(() => import("./pdf-text"), {
   ),
 });
 
-type Aba = "marcacoes" | "paginas";
+type Aba = "marcacoes" | "paginas" | "sumario";
 type Sheet = null | "painel" | "ir";
 type Modo = "pagina" | "texto";
 
@@ -561,12 +563,18 @@ function ReaderCarregado({
     });
   }
 
+  // O sumário só é montado quando a aba é aberta — em livro cujos marcadores não
+  // sabem a página, montar exige varrer o texto inteiro.
+  const sumario = useSumario(book.id, fileUrl, aba === "sumario");
+
   const painel = (
     <Painel
       aba={aba}
       setAba={setAba}
       highlights={highlights}
       bookmarks={bookmarks}
+      sumario={sumario}
+      pagina={page}
       onIr={(p) => {
         irPara(p);
         setSheet(null);
@@ -869,6 +877,16 @@ function ReaderCarregado({
                       Pronto
                     </Botao>
                   </div>
+                  <button
+                    onClick={() => {
+                      setAba("sumario");
+                      setSheet("painel");
+                    }}
+                    className="tap mt-2 w-full justify-start rounded-xl border border-border px-4 text-sm font-medium text-muted transition active:bg-background"
+                  >
+                    <List className="h-4 w-4 shrink-0" aria-hidden />
+                    Escolher pelo sumário
+                  </button>
                 </div>
 
                 <div>
@@ -964,6 +982,8 @@ function Painel({
   setAba,
   highlights,
   bookmarks,
+  sumario,
+  pagina,
   onIr,
   onDelHighlight,
   onRenomear,
@@ -974,6 +994,8 @@ function Painel({
   setAba: (a: Aba) => void;
   highlights: Highlight[];
   bookmarks: Bookmark[];
+  sumario: EstadoSumario;
+  pagina: number;
   onIr: (p: number) => void;
   onDelHighlight: (id: string) => void;
   onRenomear: (id: string) => void;
@@ -982,9 +1004,10 @@ function Painel({
 }) {
   return (
     <>
-      <div className="grid shrink-0 grid-cols-2 gap-1 border-b border-border p-2">
+      <div className="grid shrink-0 grid-cols-3 gap-1 border-b border-border p-2">
         {(
           [
+            ["sumario", "Sumário"],
             ["marcacoes", `Marcações ${highlights.length}`],
             ["paginas", `Páginas ${bookmarks.length}`],
           ] as [Aba, string][]
@@ -992,7 +1015,7 @@ function Painel({
           <button
             key={k}
             onClick={() => setAba(k)}
-            className={`tap rounded-xl text-sm font-semibold transition ${
+            className={`tap rounded-xl px-1 text-[13px] font-semibold transition ${
               aba === k
                 ? "bg-accent/10 text-accent"
                 : "text-muted hover:text-foreground"
@@ -1004,7 +1027,9 @@ function Painel({
       </div>
 
       <div className="safe-b flex-1 overflow-y-auto">
-        {aba === "marcacoes" ? (
+        {aba === "sumario" ? (
+          <Sumario estado={sumario} pagina={pagina} onIr={onIr} />
+        ) : aba === "marcacoes" ? (
           highlights.length === 0 ? (
             <Vazio>
               Nada marcado ainda. Selecione um trecho na página e escolha uma
@@ -1096,6 +1121,104 @@ function Painel({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Sumário do livro no painel lateral.
+ *
+ * Item sem página não some da lista: ele ainda mostra como o livro está
+ * organizado. Só não é clicável — melhor uma linha apagada e honesta que um
+ * botão que joga a pessoa em página errada.
+ */
+function Sumario({
+  estado,
+  pagina,
+  onIr,
+}: {
+  estado: EstadoSumario;
+  pagina: number;
+  onIr: (p: number) => void;
+}) {
+  const { itens, progresso, carregando, erro } = estado;
+
+  if (erro) {
+    return <Vazio>Não consegui ler o sumário deste livro. {erro}</Vazio>;
+  }
+
+  if (carregando || !itens) {
+    return (
+      <div className="px-4 py-10 text-center text-sm text-muted">
+        <p>
+          {progresso === null
+            ? "Lendo o sumário..."
+            : `Procurando os capítulos no texto... ${Math.round(progresso * 100)}%`}
+        </p>
+        <div className="mx-auto mt-3 h-1 w-40 overflow-hidden rounded-full bg-border">
+          <div
+            className="h-full bg-accent transition-[width] duration-300"
+            style={{ width: `${Math.round((progresso ?? 0.06) * 100)}%` }}
+          />
+        </div>
+        {progresso !== null && (
+          <p className="mt-3 text-xs">
+            Os marcadores deste PDF não dizem em que página cada capítulo começa,
+            então estou procurando pelos títulos. Isso acontece só desta vez.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (!itens.length) {
+    return <Vazio>Este livro não traz sumário — nem nos marcadores, nem nos títulos do texto.</Vazio>;
+  }
+
+  // Capítulo atual = o último que começa em página já passada.
+  let atual = -1;
+  itens.forEach((i, idx) => {
+    if (i.pagina !== null && i.pagina <= pagina) atual = idx;
+  });
+
+  return (
+    <ul className="py-1">
+      {itens.map((item, i) => {
+        const recuo = ["pl-3", "pl-7", "pl-11"][item.nivel - 1] ?? "pl-11";
+        if (item.pagina === null) {
+          return (
+            <li
+              key={`${i}-${item.titulo}`}
+              className={`${recuo} py-2 pr-3 text-sm leading-snug text-muted/60`}
+              title="Não deu pra descobrir em que página começa"
+            >
+              {item.titulo}
+            </li>
+          );
+        }
+        return (
+          <li key={`${i}-${item.titulo}`}>
+            <button
+              onClick={() => onIr(item.pagina as number)}
+              className={`${recuo} flex w-full items-baseline gap-2 py-2 pr-3 text-left transition hover:bg-background ${
+                i === atual ? "bg-accent/8 text-accent" : ""
+              }`}
+              aria-current={i === atual ? "true" : undefined}
+            >
+              <span
+                className={`min-w-0 flex-1 text-sm leading-snug ${
+                  item.nivel === 1 ? "font-semibold" : ""
+                }`}
+              >
+                {item.titulo}
+              </span>
+              <span className="shrink-0 text-xs tabular-nums text-muted">
+                {item.pagina}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
