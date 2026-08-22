@@ -175,12 +175,13 @@ body {
   margin-top: 0;
 }
 
-/* Epígrafe/citação recuada: filete na lateral, em corpo um pouco menor. */
+/* Epígrafe/citação recuada: filete na lateral, em corpo um pouco menor.
+   Na cor cheia do texto: o filete e o itálico já dizem que é citação, e apagar
+   a tinta em cima disso só custava legibilidade. */
 .leitura blockquote {
   margin: 1.2em 0;
   padding-left: 1.1em;
   border-left: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  color: var(--ink-soft);
   font-size: 0.95em;
   font-style: italic;
   text-align: left;
