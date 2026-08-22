@@ -276,6 +276,30 @@ body {
   border-left: 2px solid var(--line);
 }
 
+/* ---------- balão de ações da seleção ---------- */
+/* No celular ele mora acima da barra de navegação, longe da seleção: por cima
+   dela ele cobriria as alças que a pessoa usa pra esticar o trecho. Na tela
+   grande não existem alças, então ele sai junto do trecho mesmo. */
+
+.balao {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 4.75rem);
+  z-index: 40;
+  transform: translateX(-50%);
+}
+
+@media (min-width: 1024px) {
+  .balao {
+    position: absolute;
+    top: var(--balao-y);
+    bottom: auto;
+    left: var(--balao-x);
+    z-index: 20;
+    transform: translate(-50%, var(--balao-desloca));
+  }
+}
+
 /* ---------- alvos de toque ---------- */
 
 .tap {

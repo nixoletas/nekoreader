@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Bloco, Elo, Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
+import Balao from "@/components/balao";
 import { BarraProgresso, Botao } from "@/components/ui";
 import {
   HIGHLIGHT_LABEL,
@@ -79,6 +80,9 @@ export default function LeitorTexto({
   const [ativa, setAtiva] = useState<Ativa | null>(null);
   const artigoRef = useRef<HTMLElement>(null);
   const swipe = useSwipe(onSwipe, !!pending);
+  // O dedo está no balão? Tocar nele apaga a seleção (é um toque fora do texto),
+  // e sem esta trava o balão sumiria antes do toque virar clique.
+  const noBalao = useRef(false);
 
   // Trocar de página/capítulo derruba qualquer popover aberto do conteúdo anterior
   // (ajuste de estado durante o render).
@@ -91,6 +95,7 @@ export default function LeitorTexto({
 
   /** Lê a seleção atual e põe (ou tira) o balão de cores. */
   const lerSelecao = useCallback(() => {
+    if (noBalao.current) return;
     const artigoEl = artigoRef.current;
     const sel = window.getSelection();
 
@@ -140,10 +145,18 @@ export default function LeitorTexto({
       timer = setTimeout(lerSelecao, ESPERA_SELECAO);
     };
 
+    // Um só lugar decide se o dedo está no balão ou no texto.
+    const aoPressionar = (e: PointerEvent) => {
+      const alvo = e.target;
+      noBalao.current = alvo instanceof Element && !!alvo.closest(".balao");
+    };
+
     document.addEventListener("selectionchange", aoMudar);
+    document.addEventListener("pointerdown", aoPressionar, true);
     return () => {
       if (timer) clearTimeout(timer);
       document.removeEventListener("selectionchange", aoMudar);
+      document.removeEventListener("pointerdown", aoPressionar, true);
     };
   }, [lerSelecao]);
 
@@ -184,9 +197,10 @@ export default function LeitorTexto({
 
   async function salvar(color: HighlightColor) {
     if (!pending) return;
-    await onAddHighlight(pending.spans, pending.text, color);
     setPending(null);
+    noBalao.current = false;
     window.getSelection()?.removeAllRanges();
+    await onAddHighlight(pending.spans, pending.text, color);
   }
 
   if (erro) {
@@ -322,7 +336,7 @@ export default function LeitorTexto({
       })}
 
       {pending && (
-        <Popover x={pending.x} y={pending.y} h={pending.h}>
+        <Balao {...posicaoDoBalao(pending)}>
           {CORES.map((c) => (
             <button
               key={c}
@@ -336,6 +350,7 @@ export default function LeitorTexto({
           <button
             onClick={() => {
               setPending(null);
+              noBalao.current = false;
               window.getSelection()?.removeAllRanges();
             }}
             aria-label="Cancelar"
@@ -343,22 +358,23 @@ export default function LeitorTexto({
           >
             <X className="h-4 w-4" aria-hidden />
           </button>
-        </Popover>
+        </Balao>
       )}
 
       {ativa && !pending && (
-        <Popover x={ativa.x} y={ativa.y} h={ativa.h}>
+        <Balao {...posicaoDoBalao(ativa)}>
           <button
             onClick={async () => {
-              await onDeleteHighlight(ativa.highlight.id);
               setAtiva(null);
+              noBalao.current = false;
+              await onDeleteHighlight(ativa.highlight.id);
             }}
             className="tap flex !min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white"
           >
             <Trash2 className="h-4 w-4" aria-hidden />
             Apagar marcação
           </button>
-        </Popover>
+        </Balao>
       )}
     </article>
   );
@@ -557,32 +573,17 @@ function offsetNoContainer(
   }
 }
 
-function Popover({
-  x,
-  y,
-  h,
-  children,
-}: {
-  x: number;
-  y: number;
-  h: number;
-  children: React.ReactNode;
-}) {
+/**
+ * Onde o balão sai na tela grande, a partir do retângulo do trecho.
+ *
+ * Perto do topo do texto não cabe nada por cima, então ele desce pra baixo do
+ * trecho. (No celular isto é ignorado — lá ele é ancorado no rodapé.)
+ */
+function posicaoDoBalao({ x, y, h }: { x: number; y: number; h: number }) {
   const acima = y > 60;
-
-  return (
-    <div
-      className="sobe absolute z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl bg-[#26201a] px-2 py-1.5 shadow-xl ring-1 ring-white/10"
-      style={{
-        left: `clamp(7.5rem, ${x}px, calc(100% - 7.5rem))`,
-        top: acima ? `${y - 10}px` : `${y + h + 10}px`,
-        transform: acima ? "translate(-50%, -100%)" : "translate(-50%, 0)",
-      }}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onTouchEnd={(e) => e.stopPropagation()}
-    >
-      {children}
-    </div>
-  );
+  return {
+    acima,
+    esquerda: `clamp(7.5rem, ${x}px, calc(100% - 7.5rem))`,
+    topo: `${acima ? y - 10 : y + h + 10}px`,
+  };
 }

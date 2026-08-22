@@ -5,6 +5,7 @@ import { Document, Page } from "react-pdf";
 import { Trash2, X } from "lucide-react";
 import { PDFJS_OPTIONS } from "@/lib/pdf";
 import { useSwipe } from "@/lib/swipe";
+import Balao from "@/components/balao";
 import { BarraProgresso } from "@/components/ui";
 import {
   HIGHLIGHT_LABEL,
@@ -187,7 +188,7 @@ export default function PdfCanvas({
           </div>
 
           {pending && (
-            <Popover rects={pending.rects}>
+            <Balao {...posicaoDoBalao(pending.rects)}>
               {CORES.map((c) => (
                 <button
                   key={c}
@@ -208,11 +209,11 @@ export default function PdfCanvas({
               >
                 <X className="h-4 w-4" aria-hidden />
               </button>
-            </Popover>
+            </Balao>
           )}
 
           {ativa && !pending && (
-            <Popover rects={ativa.rects}>
+            <Balao {...posicaoDoBalao(ativa.rects)}>
               <button
                 onClick={async () => {
                   await onDeleteHighlight(ativa.id);
@@ -223,7 +224,7 @@ export default function PdfCanvas({
                 <Trash2 className="h-4 w-4" aria-hidden />
                 Apagar marcação
               </button>
-            </Popover>
+            </Balao>
           )}
         </div>
       </Document>
@@ -243,37 +244,18 @@ function Esqueleto({ texto, progresso }: { texto: string; progresso?: number | n
   );
 }
 
-function Popover({
-  rects,
-  children,
-}: {
-  rects: Rect[];
-  children: React.ReactNode;
-}) {
+/** Onde o balão sai na tela grande, a partir do primeiro retângulo da seleção. */
+function posicaoDoBalao(rects: Rect[]) {
   const r = rects[0];
-  const centro = (r.x + r.w / 2) * 100;
-  // Ancora acima da seleção; se estiver no topo da página, joga pra baixo.
+  // Perto do topo da folha não cabe nada por cima: desce pra baixo do trecho.
   const acima = r.y > 0.14;
-
-  return (
-    <div
-      className="sobe absolute z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl bg-[#26201a] px-2 py-1.5 shadow-xl ring-1 ring-white/10"
-      style={{
-        left: `clamp(7.5rem, ${centro}%, calc(100% - 7.5rem))`,
-        top: acima
-          ? `calc(${r.y * 100}% - 0.6rem)`
-          : `calc(${(r.y + r.h) * 100}% + 0.6rem)`,
-        transform: acima
-          ? "translate(-50%, -100%)"
-          : "translate(-50%, 0)",
-      }}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onTouchEnd={(e) => e.stopPropagation()}
-    >
-      {children}
-    </div>
-  );
+  return {
+    acima,
+    esquerda: `clamp(7.5rem, ${(r.x + r.w / 2) * 100}%, calc(100% - 7.5rem))`,
+    topo: acima
+      ? `calc(${r.y * 100}% - 0.6rem)`
+      : `calc(${(r.y + r.h) * 100}% + 0.6rem)`,
+  };
 }
 
 /** DOMRects → frações da página, sem duplicatas nem sobras. */
