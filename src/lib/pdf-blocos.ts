@@ -208,7 +208,7 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
 
   return grupos
     .map((g) => {
-      const emOrdem = [...g].sort((a, b) => a.x - b.x);
+      const emOrdem = semRepetidos([...g].sort((a, b) => a.x - b.x));
       let texto = "";
       let anterior: Item | null = null;
       const negrito: Faixa[] = [];
@@ -268,6 +268,38 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       };
     })
     .filter((l) => l.texto);
+}
+
+/**
+ * Tira o marcador de lista que o PDF desenha duas vezes.
+ *
+ * Tem gerador que escreve o "•" (ou o "2.") uma vez como marcador e de novo
+ * junto do texto, os dois na mesma posição — um por cima do outro, invisível na
+ * página. Na remontagem os dois viram texto, e a cópia aparece grudada onde
+ * calhou de estar na ordem do arquivo: "...such as2." no fim da linha.
+ *
+ * Dois itens na mesma altura e no mesmo x estão literalmente desenhados um sobre
+ * o outro; se um é começo do outro, é repetição. Fica o mais completo.
+ */
+function semRepetidos(itens: Item[]): Item[] {
+  const saida: Item[] = [];
+
+  for (const it of itens) {
+    if (it.espaco) {
+      saida.push(it);
+      continue;
+    }
+    const igual = saida.findIndex(
+      (a) =>
+        !a.espaco &&
+        Math.abs(a.x - it.x) <= Math.max(a.alt, it.alt) * 0.15 &&
+        (a.texto.startsWith(it.texto) || it.texto.startsWith(a.texto)),
+    );
+    if (igual < 0) saida.push(it);
+    else if (it.texto.length > saida[igual].texto.length) saida[igual] = it;
+  }
+
+  return saida;
 }
 
 /**
@@ -471,9 +503,15 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   // Depois da tabela: uma tabela no pé da página é tabela, não nota.
   marcarNotas(linhas, classes, corpo);
 
+  // Onde cada item de lista começa. Um item ocupa várias linhas, e as de baixo
+  // vêm recuadas (o "recuo pendurado"): sem saber disso, cada linha de um item
+  // virava um parágrafo, com o espaçamento de parágrafo entre elas.
+  const abreItem = linhas.map((l) => ABRE_ITEM.test(l.texto));
+
   const blocos: BlocoPosicionado[] = [];
   let atual: Linha[] = [];
   let classeAtual: Classe = { tipo: "paragrafo" };
+  let xDoItem: number | null = null;
   const fechar = () => {
     if (atual.length) {
       blocos.push({ y: atual[0].y, bloco: montar(atual, classeAtual) });
@@ -482,24 +520,34 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   };
 
   linhas.forEach((l, i) => {
+    if (abreItem[i]) xDoItem = l.x;
+    else if (xDoItem !== null && l.x <= xDoItem + corpo * 0.3) xDoItem = null;
+    // Continuação de item: recuada em relação ao marcador, e sem marcador próprio.
+    const continuaItem = xDoItem !== null && !abreItem[i];
+
     const ant = linhas[i - 1];
     if (ant) {
       const vao = ant.y - l.y;
       const salto = vao > Math.max(ant.alt, l.alt) * 1.7;
-      // Recuo só indica parágrafo novo no texto corrido — citação é recuada inteira,
-      // senão cada linha dela viraria um bloco.
+      // Recuo só indica parágrafo novo no texto corrido — citação é recuada
+      // inteira e item de lista tem recuo pendurado, senão cada linha deles
+      // viraria um bloco.
       const recuo =
-        classes[i].tipo === "paragrafo" && l.x > esquerda + corpo * 0.9;
+        classes[i].tipo === "paragrafo" &&
+        !continuaItem &&
+        l.x > esquerda + corpo * 0.9;
       // Só vale pra texto corrido: em código quase toda linha acaba em ; ou },
       // e em tabela toda célula acaba "curta" — sem isso cada linha viraria um bloco.
       const encerrou =
         classes[i].tipo === "paragrafo" &&
+        !continuaItem &&
         ant.dir - ant.x < largura * 0.82 &&
         /[.!?:;"”')\]]$/.test(ant.texto);
       // Mudou de título pra texto (ou vice-versa) é sempre fim de bloco — é isso
       // que impede o título de ser engolido pelo parágrafo logo abaixo dele.
       const trocouClasse = !mesmaClasse(classes[i], classes[i - 1]);
-      if (salto || recuo || encerrou || trocouClasse) fechar();
+      // Marcador novo é sempre item novo, mesmo colado no anterior.
+      if (salto || recuo || encerrou || trocouClasse || abreItem[i]) fechar();
     }
     classeAtual = classes[i];
     atual.push(l);
@@ -634,3 +682,11 @@ function temParAberto(s: string, fecha: string): boolean {
   }
   return saldo >= 0;
 }
+
+/**
+ * Começo de item de lista: "•", "2.", "3)", "a)" e parentes.
+ *
+ * Precisa do espaço depois do marcador pra não confundir com frase que começa em
+ * número ("2020 foi o ano em que...").
+ */
+const ABRE_ITEM = /^\s*(?:[•‣▪◦∙·]|[-–—](?=\s)|\(?\d{1,3}[.)]|\(?[a-zA-Z][.)])\s/;
