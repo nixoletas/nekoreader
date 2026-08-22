@@ -6,6 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { inspecionarPdf } from "@/lib/pdf";
 import { Aviso } from "@/components/ui";
 
+/** `null` = arquivo que não sei ler. */
+function formatoDe(f: File): "pdf" | "epub" | null {
+  const nome = f.name.toLowerCase();
+  if (f.type === "application/epub+zip" || nome.endsWith(".epub")) return "epub";
+  if (f.type === "application/pdf" || nome.endsWith(".pdf")) return "pdf";
+  return null;
+}
+
 export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -13,11 +21,9 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
   const [dragging, setDragging] = useState(false);
 
   async function enviar(files: FileList | File[]) {
-    const lista = Array.from(files).filter(
-      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
-    );
+    const lista = Array.from(files).filter((f) => formatoDe(f) !== null);
     if (!lista.length) {
-      setError("Só aceito arquivo PDF por enquanto.");
+      setError("Aceito arquivo PDF ou EPUB.");
       return;
     }
 
@@ -33,20 +39,28 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
 
     for (const [i, file] of lista.entries()) {
       const rotulo = lista.length > 1 ? `(${i + 1}/${lista.length}) ` : "";
+      const formato = formatoDe(file)!;
       try {
         setStatus(`${rotulo}Lendo ${file.name}`);
-        const { totalPages, cover } = await inspecionarPdf(file);
+        // O leitor de EPUB (com o zip junto) só é baixado quando alguém manda um —
+        // quem só usa PDF não carrega essa parte à toa.
+        const lido =
+          formato === "epub"
+            ? await (await import("@/lib/epub-inspecao")).inspecionarEpub(file)
+            : await inspecionarPdf(file);
 
         const id = crypto.randomUUID();
-        const pdfPath = `${user.id}/${id}.pdf`;
+        const arquivoPath = `${user.id}/${id}.${formato}`;
+        const tipoMime = formato === "epub" ? "application/epub+zip" : "application/pdf";
 
         setStatus(`${rotulo}Guardando na estante`);
         const up = await supabase.storage
           .from("books")
-          .upload(pdfPath, file, { contentType: "application/pdf" });
+          .upload(arquivoPath, file, { contentType: tipoMime });
         if (up.error) throw up.error;
 
         let coverPath: string | null = null;
+        const cover = lido.cover;
         if (cover) {
           const cp = `${user.id}/${id}.jpg`;
           const upc = await supabase.storage
@@ -58,15 +72,18 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
         const ins = await supabase.from("books").insert({
           id,
           user_id: user.id,
-          title: file.name.replace(/\.pdf$/i, ""),
-          storage_path: pdfPath,
+          // O EPUB traz título e autor escritos; no PDF sobra o nome do arquivo.
+          title: lido.title ?? file.name.replace(/\.(pdf|epub)$/i, ""),
+          author: lido.author ?? null,
+          format: formato,
+          storage_path: arquivoPath,
           cover_path: coverPath,
           size_bytes: file.size,
-          total_pages: totalPages,
+          total_pages: lido.totalPages,
           last_page: 1,
         });
         if (ins.error) {
-          await supabase.storage.from("books").remove([pdfPath]);
+          await supabase.storage.from("books").remove([arquivoPath]);
           throw ins.error;
         }
       } catch (e) {
@@ -107,7 +124,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,application/epub+zip,.pdf,.epub"
           multiple
           hidden
           onChange={(e) => e.target.files && void enviar(e.target.files)}
@@ -127,7 +144,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
           <>
             <p className="display text-lg">Adicionar livro</p>
             <p className="mt-0.5 text-sm text-muted">
-              <span className="hidden sm:inline">Arraste um PDF aqui ou </span>
+              <span className="hidden sm:inline">Arraste um PDF ou EPUB aqui ou </span>
               toque para escolher
             </p>
           </>

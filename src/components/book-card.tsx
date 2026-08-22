@@ -30,6 +30,8 @@ export default function BookCard({
   const confirmar = useConfirm();
   const alertar = useAlert();
 
+  const rotulo = book.format === "epub" ? "cap." : "pág.";
+
   const progresso =
     book.total_pages && book.total_pages > 1
       ? Math.min(100, Math.round((book.last_page / book.total_pages) * 100))
@@ -147,9 +149,9 @@ export default function BookCard({
           {book.title}
         </h3>
         <p className="mt-0.5 text-xs text-muted">
-          {book.total_pages
-            ? `pág. ${book.last_page} / ${book.total_pages}`
-            : `pág. ${book.last_page}`}
+          {/* No EPUB o que avança é capítulo, não folha. */}
+          {rotulo}
+          {book.total_pages ? ` ${book.last_page} / ${book.total_pages}` : ` ${book.last_page}`}
           {book.size_bytes ? ` · ${formatarTamanho(book.size_bytes)}` : ""}
         </p>
       </Link>

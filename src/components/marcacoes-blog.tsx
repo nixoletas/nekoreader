@@ -185,7 +185,7 @@ export default function MarcacoesBlog() {
                     href={`/livro/${bookId}?p=${h.page}`}
                     className="text-[11px] uppercase tracking-[0.14em] text-muted transition hover:text-accent"
                   >
-                    página {h.page}
+                    {book?.format === "epub" ? "capítulo" : "página"} {h.page}
                   </Link>
                   <span className="ml-auto flex opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                     <button

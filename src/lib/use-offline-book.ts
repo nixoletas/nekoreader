@@ -9,8 +9,8 @@ import type { Book } from "@/lib/types";
 
 type Status = "verificando" | "ausente" | "baixando" | "disponivel";
 
-/** Baixa/gerencia a cópia local do PDF de um livro, pra ler sem internet. */
-export function useOfflineBook(book: Pick<Book, "id" | "storage_path">) {
+/** Baixa/gerencia a cópia local do arquivo de um livro, pra ler sem internet. */
+export function useOfflineBook(book: Pick<Book, "id" | "storage_path" | "format">) {
   const [status, setStatus] = useState<Status>("verificando");
   const [progresso, setProgresso] = useState<number | null>(null);
   const alertar = useAlert();
@@ -48,7 +48,9 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path">) {
         }
       }
 
-      const blob = new Blob(pedacos, { type: "application/pdf" });
+      const blob = new Blob(pedacos, {
+        type: book.format === "epub" ? "application/epub+zip" : "application/pdf",
+      });
       await salvarPdfOffline({
         bookId: book.id,
         blob,
@@ -69,7 +71,7 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path">) {
     } finally {
       setProgresso(null);
     }
-  }, [book.id, book.storage_path, alertar]);
+  }, [book.id, book.storage_path, book.format, alertar]);
 
   const remover = useCallback(async () => {
     await removerPdfOffline(book.id);

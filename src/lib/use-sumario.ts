@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { abrirDoc } from "@/lib/pdf";
-import { montarSumario } from "@/lib/pdf-sumario";
 import { obterSumario, salvarSumario } from "@/lib/offline-db";
 import type { ItemSumario } from "@/lib/sumario";
+import type { BookFormat } from "@/lib/types";
 
 export type EstadoSumario = {
   itens: ItemSumario[] | null;
@@ -32,6 +31,7 @@ const PARADO: EstadoSumario = {
 export function useSumario(
   bookId: string,
   fileUrl: string | null,
+  formato: BookFormat,
   ativo: boolean,
 ): EstadoSumario {
   const [estado, setEstado] = useState<EstadoSumario>(PARADO);
@@ -58,14 +58,8 @@ export function useSumario(
           return;
         }
 
-        const doc = await abrirDoc(fileUrl);
-        if (!vivo) return;
-
-        const itens = await montarSumario(doc, {
-          sinal: controle.signal,
-          aoProgredir: (fracao) => {
-            if (vivo) setEstado((e) => ({ ...e, progresso: fracao }));
-          },
+        const itens = await montar(formato, fileUrl, controle.signal, (fracao) => {
+          if (vivo) setEstado((e) => ({ ...e, progresso: fracao }));
         });
         if (!vivo) return;
 
@@ -87,7 +81,28 @@ export function useSumario(
       vivo = false;
       controle.abort();
     };
-  }, [ativo, fileUrl, bookId]);
+  }, [ativo, fileUrl, bookId, formato]);
 
   return estado;
+}
+
+/**
+ * No EPUB o sumário já vem escrito no arquivo (nav ou NCX) — é só ler. É o PDF
+ * que dá trabalho, porque lá ele precisa ser deduzido.
+ */
+async function montar(
+  formato: BookFormat,
+  fileUrl: string,
+  sinal: AbortSignal,
+  aoProgredir: (fracao: number) => void,
+): Promise<ItemSumario[]> {
+  if (formato === "epub") {
+    const { abrirEpubDaUrl } = await import("@/lib/epub-doc");
+    return (await abrirEpubDaUrl(fileUrl)).sumario;
+  }
+  const [{ abrirDoc }, { montarSumario }] = await Promise.all([
+    import("@/lib/pdf"),
+    import("@/lib/pdf-sumario"),
+  ]);
+  return montarSumario(await abrirDoc(fileUrl), { sinal, aoProgredir });
 }

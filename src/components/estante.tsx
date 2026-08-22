@@ -236,8 +236,8 @@ export default function Estante() {
             <div className="py-14 text-center">
               <p className="display text-xl">Estante vazia</p>
               <p className="mx-auto mt-2 max-w-xs text-sm text-muted">
-                Suba seu primeiro PDF ali em cima. A capa é gerada da primeira
-                página.
+                Suba seu primeiro livro ali em cima — PDF ou EPUB. A capa vem do
+                próprio arquivo.
               </p>
             </div>
           ) : (

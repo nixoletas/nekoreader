@@ -53,6 +53,13 @@ const PdfText = dynamic(() => import("./pdf-text"), {
   ),
 });
 
+const EpubText = dynamic(() => import("./epub-text"), {
+  ssr: false,
+  loading: () => (
+    <div className="mx-auto h-96 w-full max-w-[38rem] animate-pulse rounded-lg bg-surface" />
+  ),
+});
+
 type Aba = "marcacoes" | "paginas" | "sumario";
 type Sheet = null | "painel" | "ir";
 type Modo = "pagina" | "texto";
@@ -253,9 +260,12 @@ function ReaderCarregado({
   const [sheet, setSheet] = useState<Sheet>(null);
   const [salvo, setSalvo] = useState(true);
   // preferências de leitura, lembradas entre livros
-  const [modo, mudarModo] = usePreferencia<Modo>(CHAVE_MODO, "pagina", (v) =>
+  // EPUB não tem folha pra desenhar — o texto remontado é a única leitura possível.
+  const eEpub = book.format === "epub";
+  const [modoEscolhido, mudarModo] = usePreferencia<Modo>(CHAVE_MODO, "pagina", (v) =>
     v === "texto" || v === "pagina" ? v : null,
   );
+  const modo: Modo = eEpub ? "texto" : modoEscolhido;
   const [fonte, setFonte] = usePreferencia(CHAVE_FONTE, FONTE_BASE, (v) => {
     const n = Number(v);
     return n >= FONTE_MIN && n <= FONTE_MAX ? n : null;
@@ -565,7 +575,7 @@ function ReaderCarregado({
 
   // O sumário só é montado quando a aba é aberta — em livro cujos marcadores não
   // sabem a página, montar exige varrer o texto inteiro.
-  const sumario = useSumario(book.id, fileUrl, aba === "sumario");
+  const sumario = useSumario(book.id, fileUrl, book.format, aba === "sumario");
 
   const painel = (
     <Painel
@@ -575,6 +585,7 @@ function ReaderCarregado({
       bookmarks={bookmarks}
       sumario={sumario}
       pagina={page}
+      rotuloPagina={eEpub ? "capítulo" : "página"}
       onIr={(p) => {
         irPara(p);
         setSheet(null);
@@ -643,7 +654,7 @@ function ReaderCarregado({
               <IconBtn
                 onClick={() => irPara(page - 1)}
                 disabled={page <= 1}
-                label="Página anterior"
+                label={eEpub ? "Capítulo anterior" : "Página anterior"}
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
               </IconBtn>
@@ -659,13 +670,13 @@ function ReaderCarregado({
               <IconBtn
                 onClick={() => irPara(page + 1)}
                 disabled={!!numPages && page >= numPages}
-                label="Próxima página"
+                label={eEpub ? "Próximo capítulo" : "Próxima página"}
               >
                 <ChevronRight className="h-4 w-4" aria-hidden />
               </IconBtn>
             </div>
 
-            <Segmento modo={modo} onModo={mudarModo} />
+            {!eEpub && <Segmento modo={modo} onModo={mudarModo} />}
 
             {modo === "pagina" ? (
               <div className="flex items-center rounded-xl border border-border">
@@ -746,7 +757,18 @@ function ReaderCarregado({
             <div className="mx-auto aspect-[1/1.4] w-full max-w-3xl animate-pulse rounded-lg bg-surface" />
           ) : (
             <>
-              {modo === "pagina" ? (
+              {eEpub ? (
+                <EpubText
+                  fileUrl={fileUrl}
+                  pageNumber={page}
+                  escala={fonte}
+                  highlights={marcacoesTexto}
+                  onLoadSuccess={onLoadSuccess}
+                  onAddHighlight={addHighlightTexto}
+                  onDeleteHighlight={delHighlight}
+                  onSwipe={(dir) => irPara(page + dir)}
+                />
+              ) : modo === "pagina" ? (
                 <PdfCanvas
                   fileUrl={fileUrl}
                   pageNumber={page}
@@ -771,9 +793,11 @@ function ReaderCarregado({
                 />
               )}
               <p className="mt-5 text-center text-xs text-muted">
-                {modo === "pagina"
-                  ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
-                  : "Texto remontado do PDF, com as imagens encaixadas — selecione um trecho para marcar"}
+                {eEpub
+                  ? "Deslize o dedo ou use ← → para trocar de capítulo · selecione um trecho para marcar"
+                  : modo === "pagina"
+                    ? "Selecione um trecho para marcar · deslize o dedo ou use ← → para virar a página"
+                    : "Texto remontado do PDF, com as imagens encaixadas — selecione um trecho para marcar"}
               </p>
             </>
           )}
@@ -790,7 +814,7 @@ function ReaderCarregado({
         <BarBtn
           onClick={() => irPara(page - 1)}
           disabled={page <= 1}
-          label="Anterior"
+          label={eEpub ? "Capítulo anterior" : "Anterior"}
         >
           <ChevronLeft className="h-6 w-6" aria-hidden />
         </BarBtn>
@@ -809,7 +833,8 @@ function ReaderCarregado({
         >
           <span className="text-[15px] font-semibold leading-tight">{page}</span>
           <span className="text-[10px] leading-tight text-muted">
-            de {numPages || "?"}
+            {eEpub ? "cap. de " : "de "}
+            {numPages || "?"}
           </span>
         </button>
 
@@ -825,7 +850,7 @@ function ReaderCarregado({
         <BarBtn
           onClick={() => irPara(page + 1)}
           disabled={!!numPages && page >= numPages}
-          label="Próxima"
+          label={eEpub ? "Próximo capítulo" : "Próxima"}
         >
           <ChevronRight className="h-6 w-6" aria-hidden />
         </BarBtn>
@@ -851,7 +876,7 @@ function ReaderCarregado({
               <div className="safe-b space-y-6 px-5 pb-5">
                 <div>
                   <p className="mb-2 text-sm font-medium text-muted">
-                    Ir para a página
+                    {eEpub ? "Ir para o capítulo" : "Ir para a página"}
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -889,16 +914,18 @@ function ReaderCarregado({
                   </button>
                 </div>
 
-                <div>
-                  <p className="mb-2 text-sm font-medium text-muted">
-                    Como ler
-                  </p>
-                  <Segmento
-                    modo={modo}
-                    onModo={mudarModo}
-                    className="w-full [&_button]:!min-h-12"
-                  />
-                </div>
+                {!eEpub && (
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-muted">
+                      Como ler
+                    </p>
+                    <Segmento
+                      modo={modo}
+                      onModo={mudarModo}
+                      className="w-full [&_button]:!min-h-12"
+                    />
+                  </div>
+                )}
 
                 {modo === "pagina" ? (
                   <div>
@@ -984,6 +1011,7 @@ function Painel({
   bookmarks,
   sumario,
   pagina,
+  rotuloPagina,
   onIr,
   onDelHighlight,
   onRenomear,
@@ -996,6 +1024,8 @@ function Painel({
   bookmarks: Bookmark[];
   sumario: EstadoSumario;
   pagina: number;
+  /** "página" no PDF, "capítulo" no EPUB — o número é o mesmo, o nome não. */
+  rotuloPagina: string;
   onIr: (p: number) => void;
   onDelHighlight: (id: string) => void;
   onRenomear: (id: string) => void;
@@ -1009,7 +1039,7 @@ function Painel({
           [
             ["sumario", "Sumário"],
             ["marcacoes", `Marcações ${highlights.length}`],
-            ["paginas", `Páginas ${bookmarks.length}`],
+            ["paginas", `${rotuloPagina === "capítulo" ? "Capítulos" : "Páginas"} ${bookmarks.length}`],
           ] as [Aba, string][]
         ).map(([k, label]) => (
           <button
@@ -1056,7 +1086,7 @@ function Painel({
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="text-[11px] uppercase tracking-wider text-muted">
-                      página {h.page}
+                      {rotuloPagina} {h.page}
                     </span>
                     {h.title && (
                       <p className="display mt-0.5 text-[13px] leading-snug">
@@ -1091,7 +1121,8 @@ function Painel({
           )
         ) : bookmarks.length === 0 ? (
           <Vazio>
-            Nenhuma página guardada. Use o marcador pra voltar aqui depois.
+            Nenhum{rotuloPagina === "capítulo" ? " capítulo guardado" : "a página guardada"}.
+            Use o marcador pra voltar aqui depois.
           </Vazio>
         ) : (
           <ul className="divide-y divide-border">
@@ -1106,7 +1137,7 @@ function Painel({
                     aria-hidden
                     fill="currentColor"
                   />
-                  Página {b.page}
+                  {rotuloPagina === "capítulo" ? "Capítulo" : "Página"} {b.page}
                 </button>
                 <button
                   onClick={() => onDelBookmark(b.id)}

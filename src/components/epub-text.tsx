@@ -1,20 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { abrirDoc } from "@/lib/pdf";
 import { CachePaginas } from "@/lib/pdf-cache";
-import { extrairBlocos } from "@/lib/pdf-text";
+import { abrirEpubDaUrl, blocosDoEpub } from "@/lib/epub-doc";
 import type { Bloco } from "@/lib/pdf-blocos";
 import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
 import type { Highlight, HighlightColor, TextSpan } from "@/lib/types";
 
-// Quantas páginas já remontadas (com os recortes de imagem) ficam guardadas — folhear
-// pra trás e pra frente não reprocessa. Cada entrada pode carregar algumas imagens em
-// memória, então o tamanho fica moderado de propósito.
-const PAGINAS_EM_CACHE = 8;
+/**
+ * Leitura de EPUB.
+ *
+ * Aqui não existe "página": o que vira número de página é o capítulo. Isso é o
+ * que faz progresso, marcador, marcação e sumário continuarem funcionando sem
+ * nenhum caso especial — o resto do app nunca precisa saber a diferença.
+ */
+const CAPITULOS_EM_CACHE = 4;
 
-/** Modo texto do PDF: remonta a página em blocos e entrega pro leitor comum. */
-export default function PdfText({
+export default function EpubText({
   fileUrl,
   pageNumber,
   escala,
@@ -23,9 +25,9 @@ export default function PdfText({
   onAddHighlight,
   onDeleteHighlight,
   onSwipe,
-  onModoPagina,
 }: {
   fileUrl: string;
+  /** Número do capítulo, 1 em diante. */
   pageNumber: number;
   escala: number;
   highlights: Highlight[];
@@ -37,20 +39,16 @@ export default function PdfText({
   ) => Promise<void>;
   onDeleteHighlight: (id: string) => Promise<void>;
   onSwipe: (dir: 1 | -1) => void;
-  onModoPagina: () => void;
 }) {
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<number | null>(null);
 
-  // Páginas já remontadas — o cache é dono dos object URL das imagens que guarda.
   const [cache] = useState(
-    () => new CachePaginas<Bloco[]>(PAGINAS_EM_CACHE, revogarBlocos),
+    () => new CachePaginas<Bloco[]>(CAPITULOS_EM_CACHE, revogarBlocos),
   );
   useEffect(() => () => cache.limpar(), [cache]);
 
-  // Trocar de página limpa o texto antigo — ou já mostra o que tava em cache, sem
-  // piscar o esqueleto de carregamento à toa (ajuste de estado durante o render).
   const alvo = `${fileUrl}#${pageNumber}`;
   const [alvoAnterior, setAlvoAnterior] = useState(alvo);
   if (alvoAnterior !== alvo) {
@@ -66,16 +64,16 @@ export default function PdfText({
 
     (async () => {
       try {
-        const doc = await abrirDoc(fileUrl, (fracao) => {
+        const epub = await abrirEpubDaUrl(fileUrl, (fracao) => {
           if (vivo) setProgresso(Math.round(fracao * 100));
         });
         if (!vivo) return;
         setProgresso(null);
-        onLoadSuccess(doc.numPages);
-        if (pageNumber > doc.numPages) return;
-        if (cache.obter(chave)) return; // já em cache — nada a reprocessar
+        onLoadSuccess(epub.capitulos.length);
+        if (pageNumber > epub.capitulos.length) return;
+        if (cache.obter(chave)) return;
 
-        const extraidos = await extrairBlocos(doc, pageNumber);
+        const extraidos = await blocosDoEpub(epub, pageNumber);
         if (!vivo) {
           revogarBlocos(extraidos);
           return;
@@ -83,7 +81,7 @@ export default function PdfText({
         cache.definir(chave, extraidos);
         setBlocos(extraidos);
       } catch (e) {
-        if (vivo) setErro(e instanceof Error ? e.message : "Falhou ao ler o PDF.");
+        if (vivo) setErro(e instanceof Error ? e.message : "Falhou ao ler o EPUB.");
       }
     })();
 
@@ -103,8 +101,7 @@ export default function PdfText({
       onAddHighlight={onAddHighlight}
       onDeleteHighlight={onDeleteHighlight}
       onSwipe={onSwipe}
-      onModoPagina={onModoPagina}
-      textoSemConteudo="Esta página não tem texto para ler — provavelmente é digitalizada (imagem). Só o modo Página mostra ela."
+      textoSemConteudo="Este capítulo está vazio — deve ser só uma folha de rosto ou uma página de imagem."
     />
   );
 }

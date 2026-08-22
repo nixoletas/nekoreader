@@ -2,6 +2,7 @@
 
 import { pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { Inspecao } from "@/lib/types";
 
 // Worker servido pelo próprio app (copiado em prebuild/predev).
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -50,11 +51,13 @@ export function abrirDoc(
   return promessa;
 }
 
-/** Lê nº de páginas e gera capa JPEG da página 1. */
-export async function inspecionarPdf(file: File): Promise<{
-  totalPages: number;
-  cover: Blob | null;
-}> {
+/**
+ * Lê nº de páginas e gera capa JPEG da página 1.
+ *
+ * Título e autor voltam nulos: o PDF quase nunca traz esses campos preenchidos,
+ * e o envio cai no nome do arquivo. (O EPUB traz — daí a forma compartilhada.)
+ */
+export async function inspecionarPdf(file: File): Promise<Inspecao> {
   const data = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjs.getDocument({ data }).promise;
   const totalPages = doc.numPages;
@@ -79,5 +82,5 @@ export async function inspecionarPdf(file: File): Promise<{
   }
 
   await doc.destroy();
-  return { totalPages, cover };
+  return { totalPages, cover, title: null, author: null };
 }
