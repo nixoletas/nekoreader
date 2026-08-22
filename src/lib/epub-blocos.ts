@@ -7,10 +7,15 @@
  * sabe desenhar — e, de quebra, ganhar marcação, sumário e progresso de graça.
  */
 
-import type { Bloco, Faixa } from "@/lib/pdf-blocos";
+import { acharLinks, type Bloco, type Elo, type Faixa } from "@/lib/pdf-blocos";
 
-/** Texto de um trecho, com o que estava em negrito e em itálico dentro dele. */
-export type Destaques = { texto: string; negrito: Faixa[]; italico: Faixa[] };
+/** Texto de um trecho, com negrito, itálico e endereços clicáveis dentro dele. */
+export type Destaques = {
+  texto: string;
+  negrito: Faixa[];
+  italico: Faixa[];
+  links: Elo[];
+};
 
 /** O que fazer com uma imagem: devolver a URL pra exibir, ou `null` pra ignorar. */
 export type ResolvedorDeImagem = (src: string) => { url: string } | null;
@@ -104,10 +109,10 @@ function percorrer(
 
   const fechar = () => {
     if (!solto.length) return;
-    const { texto, negrito, italico } = destaquesDeNos(solto);
+    const { texto, negrito, italico, links } = destaquesDeNos(solto);
     solto = [];
     if (texto) {
-      blocos.push({ tipo: tipoDe(contexto), texto, negrito, italico });
+      blocos.push({ tipo: tipoDe(contexto), texto, negrito, italico, links });
     }
   };
 
@@ -162,13 +167,14 @@ function percorrer(
 
     if (nome === "dt") {
       // Termo de uma lista de definição: é o título da entrada, então vai em negrito.
-      const { texto, italico } = comDestaques(filho);
+      const { texto, italico, links } = comDestaques(filho);
       if (texto) {
         blocos.push({
           tipo: tipoDe(contexto),
           texto,
           negrito: [{ start: 0, end: texto.length }],
           italico,
+          links,
         });
       }
       continue;
@@ -180,8 +186,8 @@ function percorrer(
     // Contêiner (div, section, figure, ul...) ou folha de texto (p, dt, figcaption).
     if (temBlocoDentro(filho)) percorrer(filho, blocos, imagem, aqui);
     else {
-      const { texto, negrito, italico } = comDestaques(filho);
-      if (texto) blocos.push({ tipo: tipoDe(aqui), texto, negrito, italico });
+      const { texto, negrito, italico, links } = comDestaques(filho);
+      if (texto) blocos.push({ tipo: tipoDe(aqui), texto, negrito, italico, links });
     }
   }
 
@@ -202,15 +208,16 @@ function lerItemDeLista(
   const proprios = Array.from(el.childNodes).filter(
     (n) => !(n.nodeType === 1 && ["ul", "ol", "dl"].includes((n as Element).tagName.toLowerCase())),
   );
-  const { texto, negrito, italico } = destaquesDeNos(proprios);
+  const { texto, negrito, italico, links } = destaquesDeNos(proprios);
   if (texto) {
     // O marcador entra na frente do texto, então as faixas andam dois caracteres.
-    const desloca = (f: Faixa) => ({ start: f.start + 2, end: f.end + 2 });
+    const desloca = <T extends Faixa>(f: T): T => ({ ...f, start: f.start + 2, end: f.end + 2 });
     blocos.push({
       tipo: tipoDe(contexto),
       texto: `• ${texto}`,
       negrito: negrito.map(desloca),
       italico: italico.map(desloca),
+      links: links.map(desloca),
     });
   }
   for (const neto of Array.from(el.children)) {
@@ -245,6 +252,7 @@ export function destaquesDeNos(nos: Node[]): Destaques {
   let texto = "";
   const negrito: Faixa[] = [];
   const italico: Faixa[] = [];
+  const links: Elo[] = [];
 
   // `jaEm` evita faixa dentro de faixa: <strong>a <em>b</em></strong> já está
   // todo em negrito, e abrir uma segunda faixa de negrito por dentro não muda nada.
@@ -272,6 +280,10 @@ export function destaquesDeNos(nos: Node[]): Destaques {
     if (texto.length > inicio) {
       if (ehNegrito && !jaEmNegrito) negrito.push({ start: inicio, end: texto.length });
       if (ehItalico && !jaEmItalico) italico.push({ start: inicio, end: texto.length });
+      if (nome === "a") {
+        const href = hrefExterno(elemento.getAttribute("href"));
+        if (href) links.push({ start: inicio, end: texto.length, href });
+      }
     }
   };
 
@@ -279,7 +291,38 @@ export function destaquesDeNos(nos: Node[]): Destaques {
 
   // Espaço do XHTML é livre: o que vale é o texto já normalizado, e as faixas
   // precisam andar junto com ele.
-  return normalizarEspacos(texto, negrito, italico);
+  return comAutolinks(normalizarEspacos(texto, negrito, italico, links));
+}
+
+/**
+ * Junta os endereços escritos soltos aos que o livro já marcou com `<a>`.
+ *
+ * EPUB convertido de outro formato costuma deixar a URL como texto puro; sem
+ * isso, o mesmo endereço seria clicável num livro e não no outro. O `<a>` de
+ * verdade manda: só entra autolink onde não há link declarado por cima.
+ */
+function comAutolinks(d: Destaques): Destaques {
+  const achados = acharLinks(d.texto).filter(
+    (a) => !d.links.some((l) => a.start < l.end && l.start < a.end),
+  );
+  if (!achados.length) return d;
+  return {
+    ...d,
+    links: [...d.links, ...achados].sort((a, b) => a.start - b.start),
+  };
+}
+
+/**
+ * Só endereço que sai do livro vira link.
+ *
+ * `#nota-3` e `cap4.xhtml` apontam pra dentro do próprio EPUB, e aqui não existe
+ * o arquivo pra onde ir — clicar levaria a lugar nenhum. Esses continuam texto
+ * comum, que é o que já eram.
+ */
+function hrefExterno(href: string | null): string | null {
+  if (!href) return null;
+  const limpo = href.trim();
+  return /^(https?:|mailto:|tel:)/i.test(limpo) ? limpo : null;
 }
 
 /**
@@ -294,6 +337,7 @@ export function normalizarEspacos(
   bruto: string,
   faixasNegrito: Faixa[],
   faixasItalico: Faixa[],
+  faixasLinks: Elo[] = [],
 ): Destaques {
   // mapa[i] = onde o caractere i do texto bruto foi parar no texto final
   const mapa = new Int32Array(bruto.length + 1);
@@ -318,17 +362,22 @@ export function normalizarEspacos(
   mapa[bruto.length] = texto.length;
   // Espaço pendente no fim nunca é escrito, então `texto` já sai aparado dos dois lados.
 
-  const mover = (faixas: Faixa[]): Faixa[] => {
-    const saida: Faixa[] = [];
+  const mover = <T extends Faixa>(faixas: T[]): T[] => {
+    const saida: T[] = [];
     for (const f of faixas) {
       const start = mapa[Math.max(0, Math.min(bruto.length, f.start))];
       const end = mapa[Math.max(0, Math.min(bruto.length, f.end))];
-      if (end > start) saida.push({ start, end });
+      if (end > start) saida.push({ ...f, start, end });
     }
     return saida;
   };
 
-  return { texto, negrito: mover(faixasNegrito), italico: mover(faixasItalico) };
+  return {
+    texto,
+    negrito: mover(faixasNegrito),
+    italico: mover(faixasItalico),
+    links: mover(faixasLinks),
+  };
 }
 
 function textoLimpo(el: Element): string {
