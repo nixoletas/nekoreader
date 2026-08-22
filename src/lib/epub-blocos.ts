@@ -9,8 +9,34 @@
 
 import type { Bloco, Faixa } from "@/lib/pdf-blocos";
 
+/** Texto de um trecho, com o que estava em negrito e em itálico dentro dele. */
+export type Destaques = { texto: string; negrito: Faixa[]; italico: Faixa[] };
+
 /** O que fazer com uma imagem: devolver a URL pra exibir, ou `null` pra ignorar. */
 export type ResolvedorDeImagem = (src: string) => { url: string } | null;
+
+/** Em que "moldura" o texto está: muda o tipo do bloco, não o conteúdo. */
+type Contexto = "normal" | "citacao" | "nota";
+
+/** Bloco de texto conforme a moldura em que ele apareceu. */
+function tipoDe(contexto: Contexto): "paragrafo" | "citacao" | "nota" {
+  return contexto === "normal" ? "paragrafo" : contexto;
+}
+
+/**
+ * Nota de rodapé declarada pelo próprio livro.
+ *
+ * O EPUB 3 marca com `epub:type="footnote"` (ou endnote/rearnote) e o ARIA
+ * equivalente é `role="doc-footnote"`. Vale a pena confiar nisso: é o autor do
+ * livro dizendo o que é nota, sem precisar adivinhar por tamanho de letra como
+ * no PDF.
+ */
+function ehNota(el: Element): boolean {
+  const tipo = `${el.getAttribute("epub:type") ?? ""} ${el.getAttribute("type") ?? ""}`;
+  if (/\b(foot|end|rear)note\b/.test(tipo)) return true;
+  const papel = el.getAttribute("role") ?? "";
+  return /\bdoc-(foot|end)note\b/.test(papel);
+}
 
 const IGNORADAS = new Set([
   "script",
@@ -25,7 +51,10 @@ const IGNORADAS = new Set([
   "form",
 ]);
 
-const DESTAQUE = new Set(["strong", "b", "em", "i", "mark", "dfn"]);
+/** Peso: vira <strong> no reflow. */
+const NEGRITO = new Set(["strong", "b", "mark"]);
+/** Ênfase e nome de obra: viram <em>. */
+const ITALICO = new Set(["em", "i", "cite", "var", "dfn", "address"]);
 
 /** Converte um capítulo inteiro em blocos, na ordem em que aparecem. */
 export function blocosDoCapitulo(
@@ -36,7 +65,7 @@ export function blocosDoCapitulo(
   if (!corpo) return [];
 
   const blocos: Bloco[] = [];
-  percorrer(corpo, blocos, imagem, false);
+  percorrer(corpo, blocos, imagem, "normal");
   return blocos.filter(
     (b) =>
       b.tipo === "imagem" ||
@@ -69,16 +98,16 @@ function percorrer(
   el: Element,
   blocos: Bloco[],
   imagem: ResolvedorDeImagem,
-  dentroDeCitacao: boolean,
+  contexto: Contexto,
 ) {
   let solto: Node[] = [];
 
   const fechar = () => {
     if (!solto.length) return;
-    const { texto, negrito } = destaquesDeNos(solto);
+    const { texto, negrito, italico } = destaquesDeNos(solto);
     solto = [];
     if (texto) {
-      blocos.push({ tipo: dentroDeCitacao ? "citacao" : "paragrafo", texto, negrito });
+      blocos.push({ tipo: tipoDe(contexto), texto, negrito, italico });
     }
   };
 
@@ -122,39 +151,37 @@ function percorrer(
 
     if (nome === "blockquote") {
       // A citação é o próprio recuo: o conteúdo dela entra marcado como citação.
-      percorrer(filho, blocos, imagem, true);
+      percorrer(filho, blocos, imagem, "citacao");
       continue;
     }
 
     if (nome === "li") {
-      lerItemDeLista(filho, blocos, imagem, dentroDeCitacao);
+      lerItemDeLista(filho, blocos, imagem, contexto);
       continue;
     }
 
     if (nome === "dt") {
       // Termo de uma lista de definição: é o título da entrada, então vai em negrito.
-      const { texto } = comDestaques(filho);
+      const { texto, italico } = comDestaques(filho);
       if (texto) {
         blocos.push({
-          tipo: dentroDeCitacao ? "citacao" : "paragrafo",
+          tipo: tipoDe(contexto),
           texto,
           negrito: [{ start: 0, end: texto.length }],
+          italico,
         });
       }
       continue;
     }
 
+    // Nota declarada pelo livro vale mais que a moldura em que ela estiver.
+    const aqui: Contexto = ehNota(filho) ? "nota" : contexto;
+
     // Contêiner (div, section, figure, ul...) ou folha de texto (p, dt, figcaption).
-    if (temBlocoDentro(filho)) percorrer(filho, blocos, imagem, dentroDeCitacao);
+    if (temBlocoDentro(filho)) percorrer(filho, blocos, imagem, aqui);
     else {
-      const { texto, negrito } = comDestaques(filho);
-      if (texto) {
-        blocos.push({
-          tipo: dentroDeCitacao ? "citacao" : "paragrafo",
-          texto,
-          negrito,
-        });
-      }
+      const { texto, negrito, italico } = comDestaques(filho);
+      if (texto) blocos.push({ tipo: tipoDe(aqui), texto, negrito, italico });
     }
   }
 
@@ -170,22 +197,25 @@ function lerItemDeLista(
   el: Element,
   blocos: Bloco[],
   imagem: ResolvedorDeImagem,
-  dentroDeCitacao: boolean,
+  contexto: Contexto,
 ) {
   const proprios = Array.from(el.childNodes).filter(
     (n) => !(n.nodeType === 1 && ["ul", "ol", "dl"].includes((n as Element).tagName.toLowerCase())),
   );
-  const { texto, negrito } = destaquesDeNos(proprios);
+  const { texto, negrito, italico } = destaquesDeNos(proprios);
   if (texto) {
+    // O marcador entra na frente do texto, então as faixas andam dois caracteres.
+    const desloca = (f: Faixa) => ({ start: f.start + 2, end: f.end + 2 });
     blocos.push({
-      tipo: dentroDeCitacao ? "citacao" : "paragrafo",
+      tipo: tipoDe(contexto),
       texto: `• ${texto}`,
-      negrito: negrito.map((f) => ({ start: f.start + 2, end: f.end + 2 })),
+      negrito: negrito.map(desloca),
+      italico: italico.map(desloca),
     });
   }
   for (const neto of Array.from(el.children)) {
     if (["ul", "ol", "dl"].includes(neto.tagName.toLowerCase())) {
-      percorrer(neto, blocos, imagem, dentroDeCitacao);
+      percorrer(neto, blocos, imagem, contexto);
     }
   }
 }
@@ -206,16 +236,19 @@ function temBlocoDentro(el: Element): boolean {
  * O leitor guarda marcação por índice de caractere dentro do bloco, então
  * `negrito` precisa cair exatamente sobre o texto que sai daqui.
  */
-export function comDestaques(el: Element): { texto: string; negrito: Faixa[] } {
+export function comDestaques(el: Element): Destaques {
   return destaquesDeNos(Array.from(el.childNodes));
 }
 
 /** Mesma coisa, para uma sequência solta de nós (o texto entre dois blocos). */
-export function destaquesDeNos(nos: Node[]): { texto: string; negrito: Faixa[] } {
+export function destaquesDeNos(nos: Node[]): Destaques {
   let texto = "";
   const negrito: Faixa[] = [];
+  const italico: Faixa[] = [];
 
-  const visitar = (no: Node, destacando: boolean) => {
+  // `jaEm` evita faixa dentro de faixa: <strong>a <em>b</em></strong> já está
+  // todo em negrito, e abrir uma segunda faixa de negrito por dentro não muda nada.
+  const visitar = (no: Node, jaEmNegrito: boolean, jaEmItalico: boolean) => {
     if (no.nodeType === 3) {
       texto += no.nodeValue ?? "";
       return;
@@ -230,19 +263,23 @@ export function destaquesDeNos(nos: Node[]): { texto: string; negrito: Faixa[] }
       return;
     }
 
-    const destaque = destacando || DESTAQUE.has(nome);
+    const ehNegrito = jaEmNegrito || NEGRITO.has(nome);
+    const ehItalico = jaEmItalico || ITALICO.has(nome);
     const inicio = texto.length;
-    for (const filho of Array.from(elemento.childNodes)) visitar(filho, destaque);
-    if (destaque && !destacando && texto.length > inicio) {
-      negrito.push({ start: inicio, end: texto.length });
+    for (const filho of Array.from(elemento.childNodes)) {
+      visitar(filho, ehNegrito, ehItalico);
+    }
+    if (texto.length > inicio) {
+      if (ehNegrito && !jaEmNegrito) negrito.push({ start: inicio, end: texto.length });
+      if (ehItalico && !jaEmItalico) italico.push({ start: inicio, end: texto.length });
     }
   };
 
-  for (const no of nos) visitar(no, false);
+  for (const no of nos) visitar(no, false, false);
 
   // Espaço do XHTML é livre: o que vale é o texto já normalizado, e as faixas
   // precisam andar junto com ele.
-  return normalizarEspacos(texto, negrito);
+  return normalizarEspacos(texto, negrito, italico);
 }
 
 /**
@@ -255,8 +292,9 @@ export function destaquesDeNos(nos: Node[]): { texto: string; negrito: Faixa[] }
  */
 export function normalizarEspacos(
   bruto: string,
-  faixas: Faixa[],
-): { texto: string; negrito: Faixa[] } {
+  faixasNegrito: Faixa[],
+  faixasItalico: Faixa[],
+): Destaques {
   // mapa[i] = onde o caractere i do texto bruto foi parar no texto final
   const mapa = new Int32Array(bruto.length + 1);
   let texto = "";
@@ -280,14 +318,17 @@ export function normalizarEspacos(
   mapa[bruto.length] = texto.length;
   // Espaço pendente no fim nunca é escrito, então `texto` já sai aparado dos dois lados.
 
-  const negrito: Faixa[] = [];
-  for (const f of faixas) {
-    const start = mapa[Math.max(0, Math.min(bruto.length, f.start))];
-    const end = mapa[Math.max(0, Math.min(bruto.length, f.end))];
-    if (end > start) negrito.push({ start, end });
-  }
+  const mover = (faixas: Faixa[]): Faixa[] => {
+    const saida: Faixa[] = [];
+    for (const f of faixas) {
+      const start = mapa[Math.max(0, Math.min(bruto.length, f.start))];
+      const end = mapa[Math.max(0, Math.min(bruto.length, f.end))];
+      if (end > start) saida.push({ start, end });
+    }
+    return saida;
+  };
 
-  return { texto, negrito };
+  return { texto, negrito: mover(faixasNegrito), italico: mover(faixasItalico) };
 }
 
 function textoLimpo(el: Element): string {

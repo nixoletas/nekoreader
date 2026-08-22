@@ -139,6 +139,36 @@ body {
   font-weight: 700;
 }
 
+/* Título de obra, termo estrangeiro, ênfase — como estava no livro. */
+.leitura em {
+  font-style: italic;
+}
+
+/* ---------- nota de rodapé ---------- */
+/* O filete só aparece na primeira nota da página: as seguintes se encostam nela
+   como um bloco só, do jeito que o rodapé é impresso. */
+
+.leitura .nota {
+  margin-top: 0.5em;
+  font-size: 0.82em;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-align: left;
+  hyphens: none;
+}
+
+.leitura :not(.nota) + .nota {
+  margin-top: 2em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--line);
+}
+
+.leitura .nota:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 .leitura h1:first-child,
 .leitura h2:first-child,
 .leitura h3:first-child {

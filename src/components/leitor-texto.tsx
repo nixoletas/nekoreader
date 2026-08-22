@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Bloco, Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
@@ -243,12 +243,14 @@ export default function LeitorTexto({
             </div>
           );
         }
+        const comEstilo = b.tipo === "paragrafo" || b.tipo === "citacao" || b.tipo === "nota";
         const conteudo = fatiarTexto(
           b.texto,
           i,
           highlights,
           ativa?.highlight.id ?? null,
-          b.tipo === "paragrafo" || b.tipo === "citacao" ? b.negrito : [],
+          comEstilo ? b.negrito : [],
+          comEstilo ? b.italico : [],
         );
         if (b.tipo === "codigo") {
           return (
@@ -270,6 +272,13 @@ export default function LeitorTexto({
             <blockquote key={i} data-bloco={i}>
               {conteudo}
             </blockquote>
+          );
+        }
+        if (b.tipo === "nota") {
+          return (
+            <p key={i} className="nota" data-bloco={i}>
+              {conteudo}
+            </p>
           );
         }
         return (
@@ -325,9 +334,11 @@ export default function LeitorTexto({
 /* ---------------------------------------------------------------- */
 
 /**
- * Fatia o texto do bloco nos trechos marcados (<mark>) e em destaque (<strong>).
+ * Fatia o texto do bloco nos trechos marcados (<mark>), em negrito (<strong>) e
+ * em itálico (<em>).
  *
- * Os dois se sobrepõem à vontade — marcar metade de uma palavra em negrito é
+ * As três camadas se sobrepõem à vontade — marcar metade de uma palavra em
+ * negrito, ou um título de livro em itálico dentro de uma frase marcada, é
  * normal —, então o corte é feito em todos os limites de uma vez e cada pedaço
  * recebe o que valer nele.
  */
@@ -337,6 +348,7 @@ function fatiarTexto(
   highlights: Highlight[],
   ativaId: string | null,
   negrito: Faixa[] = [],
+  italico: Faixa[] = [],
 ): React.ReactNode {
   const dentro = (f: Faixa) => ({
     start: Math.max(0, Math.min(texto.length, f.start)),
@@ -354,11 +366,12 @@ function fatiarTexto(
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
   const fortes = negrito.map(dentro).filter((f) => f.start < f.end);
+  const inclinados = italico.map(dentro).filter((f) => f.start < f.end);
 
-  if (!trechos.length && !fortes.length) return texto;
+  if (!trechos.length && !fortes.length && !inclinados.length) return texto;
 
   const pontos = new Set<number>([0, texto.length]);
-  for (const f of [...trechos, ...fortes]) {
+  for (const f of [...trechos, ...fortes, ...inclinados]) {
     pontos.add(f.start);
     pontos.add(f.end);
   }
@@ -369,26 +382,31 @@ function fatiarTexto(
     const ini = cortes[i];
     const fim = cortes[i + 1];
     if (ini >= fim) continue;
-    const sub = texto.slice(ini, fim);
-    const forte = fortes.some((f) => f.start <= ini && f.end >= fim);
-    const conteudo = forte ? <strong>{sub}</strong> : sub;
-    const cobre = trechos.find((t) => t.start <= ini && t.end >= fim);
-    if (cobre) {
+    const cobre = (f: Faixa) => f.start <= ini && f.end >= fim;
+
+    // De dentro pra fora: o texto ganha primeiro o itálico, depois o negrito, e
+    // por último o véu da marcação — que precisa ficar por fora pra pintar tudo.
+    let conteudo: React.ReactNode = texto.slice(ini, fim);
+    if (inclinados.some(cobre)) conteudo = <em>{conteudo}</em>;
+    if (fortes.some(cobre)) conteudo = <strong>{conteudo}</strong>;
+
+    const marcado = trechos.find(cobre);
+    if (marcado) {
       nos.push(
         <mark
           key={ini}
-          data-highlight-id={cobre.id}
-          data-ativa={cobre.id === ativaId}
+          data-highlight-id={marcado.id}
+          data-ativa={marcado.id === ativaId}
           className="txt-mark"
-          style={{ background: fill(cobre.color) }}
+          style={{ background: fill(marcado.color) }}
         >
           {conteudo}
         </mark>,
       );
-    } else if (forte) {
-      nos.push(<strong key={ini}>{sub}</strong>);
     } else {
-      nos.push(sub);
+      // Fragment só pra carregar a chave: <em>/<strong> aninhados já dão a
+      // marcação certa, e um <span> por volta seria elemento a mais à toa.
+      nos.push(<Fragment key={ini}>{conteudo}</Fragment>);
     }
   }
   return nos;

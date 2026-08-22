@@ -1,4 +1,4 @@
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { extrairImagens, type ImagemPagina } from "@/lib/pdf-images";
 import {
   remontarColunas,
@@ -25,8 +25,12 @@ export async function extrairBlocos(
   const { width: pw } = page.getViewport({ scale: 1 });
   const [conteudo, imagens] = await Promise.all([
     page.getTextContent(),
+    // Também é o que resolve as fontes de verdade em `commonObjs` (ele percorre a
+    // lista de operadores) — sem isso não dá pra saber qual trecho é itálico.
     extrairImagens(page),
   ]);
+
+  const italicas = fontesItalicas(page, conteudo.styles);
 
   const itens: Item[] = [];
   for (const it of conteudo.items) {
@@ -42,6 +46,7 @@ export async function extrairBlocos(
       // O pdf.js já resolve a família da fonte incorporada; "monospace" aqui é o
       // que separa bloco de código de texto comum.
       mono: conteudo.styles?.[fonte]?.fontFamily === "monospace",
+      italico: italicas.has(fonte),
       espaco: !it.str.trim(),
     });
   }
@@ -74,6 +79,33 @@ export async function extrairBlocos(
           !/^\d{1,4}$/.test(b.texto),
       )
     : blocos;
+}
+
+/**
+ * Quais ids de fonte da página são itálicos.
+ *
+ * O `styles` do pdf.js só diz a família genérica (serif/sans/monospace); quem
+ * sabe do itálico é o nome real da fonte incorporada ("MinionPro-It",
+ * "Garamond-Italic", "Helvetica-Oblique"), que fica no `commonObjs`. Ele só está
+ * resolvido depois da lista de operadores — por isso a checagem com `has`, que
+ * devolve "nenhuma itálica" em vez de estourar se algo mudar nessa ordem.
+ */
+function fontesItalicas(
+  page: PDFPageProxy,
+  styles: Record<string, { fontFamily?: string }> | undefined,
+): Set<string> {
+  const italicas = new Set<string>();
+  for (const id of Object.keys(styles ?? {})) {
+    try {
+      if (!page.commonObjs.has(id)) continue;
+      const fonte = page.commonObjs.get(id) as { name?: string } | null;
+      const nome = fonte?.name ?? "";
+      if (/italic|oblique|[-_]it($|[^a-z])/i.test(nome)) italicas.add(id);
+    } catch {
+      // fonte não resolvida: segue sem itálico, que é melhor que não abrir a página
+    }
+  }
+  return italicas;
 }
 
 function imagemParaBloco(im: ImagemPagina): Bloco {

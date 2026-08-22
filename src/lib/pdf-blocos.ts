@@ -12,8 +12,10 @@ export type Faixa = { start: number; end: number };
 /** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <pre>, <table> ou <img>. */
 export type Bloco =
   | { tipo: "titulo"; nivel: 1 | 2 | 3; texto: string }
-  | { tipo: "paragrafo"; texto: string; negrito: Faixa[] }
-  | { tipo: "citacao"; texto: string; negrito: Faixa[] }
+  | { tipo: "paragrafo"; texto: string; negrito: Faixa[]; italico: Faixa[] }
+  | { tipo: "citacao"; texto: string; negrito: Faixa[]; italico: Faixa[] }
+  /** Nota de rodapé: mesmo texto corrido, só que em corpo menor e no pé da página. */
+  | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[] }
   | { tipo: "codigo"; texto: string }
   | { tipo: "tabela"; linhas: string[][] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
@@ -31,6 +33,8 @@ export type Item = {
   fonte: string;
   /** Fonte monoespaçada — é o que denuncia bloco de código. */
   mono: boolean;
+  /** Fonte itálica (o nome dela termina em -It, Italic, Oblique...). */
+  italico: boolean;
   /** Item que só carrega espaço — separa palavras, não conta como conteúdo. */
   espaco: boolean;
 };
@@ -54,6 +58,8 @@ type Linha = {
   celulas: Celula[];
   /** Trechos em destaque dentro da linha (índice de caractere no texto dela). */
   negrito: Faixa[];
+  /** Trechos em itálico, na mesma contagem de caracteres. */
+  italico: Faixa[];
 };
 
 /** Como a linha vai ser tratada. */
@@ -61,6 +67,7 @@ type Classe =
   | { tipo: "titulo"; nivel: 1 | 2 | 3 }
   | { tipo: "paragrafo" }
   | { tipo: "citacao" }
+  | { tipo: "nota" }
   | { tipo: "codigo" }
   | { tipo: "tabela" };
 
@@ -202,6 +209,18 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       let texto = "";
       let anterior: Item | null = null;
       const negrito: Faixa[] = [];
+      const italico: Faixa[] = [];
+
+      // Trecho vizinho do mesmo tipo é emendado no anterior em vez de virar faixa
+      // nova — senão "Data Governance: The Definitive Guide" viraria quatro <em>,
+      // um por item do pdf.js. Emenda também por cima do espaço entre palavras.
+      const marcar = (faixas: Faixa[], inicio: number, fim: number) => {
+        const ultimo = faixas[faixas.length - 1];
+        const colado =
+          ultimo && ultimo.end <= inicio && !texto.slice(ultimo.end, inicio).trim();
+        if (colado) ultimo.end = fim;
+        else faixas.push({ start: inicio, end: fim });
+      };
 
       for (const it of emOrdem) {
         const separado =
@@ -215,15 +234,15 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
         const pedaco = it.texto.replace(/\s+/g, " ");
         const inicio = texto.length;
         texto += pedaco;
-        // Destaque = outra fonte e maior que o corpo. O mesmo sinal do título, o que
+        // Negrito = outra fonte e maior que o corpo. O mesmo sinal do título, o que
         // é coerente: é literalmente a fonte de título usada no meio da linha
-        // ("**Metadata.** Metadata is..."). Termo em itálico no corpo do texto usa
-        // outra fonte mas o mesmo tamanho, e por isso não entra aqui.
+        // ("**Metadata.** Metadata is...").
         if (it.fonte !== fonteCorpo && it.alt >= corpo * 1.05) {
-          const ultimo = negrito[negrito.length - 1];
-          if (ultimo && ultimo.end === inicio) ultimo.end = texto.length;
-          else negrito.push({ start: inicio, end: texto.length });
+          marcar(negrito, inicio, texto.length);
         }
+        // Itálico vem do nome da fonte, não do tamanho: no corpo do texto ele usa
+        // outra fonte com a mesma altura, então nenhuma medida geométrica o pega.
+        if (it.italico) marcar(italico, inicio, texto.length);
       }
       while (/\s$/.test(texto)) texto = texto.slice(0, -1);
 
@@ -233,6 +252,7 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       return {
         texto,
         negrito,
+        italico,
         x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
@@ -391,6 +411,48 @@ function marcarTabelas(linhas: Linha[], classes: Classe[], corpo: number): void 
   }
 }
 
+/**
+ * Marca as notas de rodapé no pé da coluna.
+ *
+ * O sinal é a combinação de três coisas, que juntas não acontecem no meio do
+ * texto: corpo visivelmente menor que o do texto (aqui, 8.3 contra 12.4), estar
+ * na última leva de linhas da página, e um vão de separação bem maior que o
+ * entrelinhas normal — o branco que o miolo da página deixa acima da nota.
+ *
+ * Sozinho, "menor que o corpo" pegaria legenda de figura e linha de tabela; por
+ * isso a varredura começa da última linha e para no primeiro tamanho normal.
+ */
+function marcarNotas(linhas: Linha[], classes: Classe[], corpo: number): void {
+  if (linhas.length < 3) return;
+
+  const miudo = (i: number) =>
+    linhas[i].alt <= corpo * 0.9 &&
+    (classes[i].tipo === "paragrafo" || classes[i].tipo === "citacao");
+
+  // De baixo pra cima, enquanto for pequeno.
+  let inicio = linhas.length;
+  while (inicio > 0 && miudo(inicio - 1)) inicio--;
+  if (inicio === linhas.length) return; // nada pequeno no pé
+
+  // Nota é o rodapé da página, não a página inteira.
+  if (linhas.length - inicio > linhas.length * 0.4) return;
+  if (inicio === 0) return;
+
+  const vaos: number[] = [];
+  for (let i = 1; i < inicio; i++) {
+    const v = linhas[i - 1].y - linhas[i].y;
+    if (v > 0) vaos.push(v);
+  }
+  const vaoTipico = mediana(vaos) || linhas[0].alt;
+  const separada = linhas[inicio - 1].y - linhas[inicio].y > vaoTipico * 1.35;
+  // Marcador de chamada ("1 Evren Eryurek...", "* Ver adiante") confirma sem
+  // depender do branco, que alguns livros apertam.
+  const comMarcador = /^[\d*†‡§]/.test(linhas[inicio].texto);
+  if (!separada && !comMarcador) return;
+
+  for (let i = inicio; i < linhas.length; i++) classes[i] = { tipo: "nota" };
+}
+
 function mesmaClasse(a: Classe, b: Classe): boolean {
   if (a.tipo !== b.tipo) return false;
   return a.tipo === "titulo" && b.tipo === "titulo" ? a.nivel === b.nivel : true;
@@ -403,6 +465,8 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   const largura = mediana(linhas.map((l) => l.dir - l.x));
   const classes = linhas.map((l) => classificar(l, corpo, esquerda));
   marcarTabelas(linhas, classes, corpo);
+  // Depois da tabela: uma tabela no pé da página é tabela, não nota.
+  marcarNotas(linhas, classes, corpo);
 
   const blocos: BlocoPosicionado[] = [];
   let atual: Linha[] = [];
@@ -461,6 +525,7 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
 
   let texto = "";
   const negrito: Faixa[] = [];
+  const italico: Faixa[] = [];
   for (const l of linhas) {
     if (!texto) {
       texto = l.texto;
@@ -481,16 +546,21 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
     // Onde esta linha acabou caindo no texto do bloco — vale pros três jeitos de
     // juntar acima, inclusive o que apaga o hífen.
     const deslocamento = texto.length - l.texto.length;
-    for (const n of l.negrito) {
-      const faixa = { start: n.start + deslocamento, end: n.end + deslocamento };
-      const ultimo = negrito[negrito.length - 1];
-      if (ultimo && ultimo.end >= faixa.start) ultimo.end = Math.max(ultimo.end, faixa.end);
-      else negrito.push(faixa);
-    }
+    const transportar = (de: Faixa[], para: Faixa[]) => {
+      for (const n of de) {
+        const faixa = { start: n.start + deslocamento, end: n.end + deslocamento };
+        const ultimo = para[para.length - 1];
+        if (ultimo && ultimo.end >= faixa.start) ultimo.end = Math.max(ultimo.end, faixa.end);
+        else para.push(faixa);
+      }
+    };
+    transportar(l.negrito, negrito);
+    transportar(l.italico, italico);
   }
 
   // Título já é destacado por inteiro; marcar de novo por dentro seria redundante.
   if (classe.tipo === "titulo") return { tipo: "titulo", nivel: classe.nivel, texto };
-  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito };
-  return { tipo: "paragrafo", texto, negrito };
+  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito, italico };
+  if (classe.tipo === "nota") return { tipo: "nota", texto, negrito, italico };
+  return { tipo: "paragrafo", texto, negrito, italico };
 }
