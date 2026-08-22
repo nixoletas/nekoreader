@@ -12,11 +12,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Highlighter,
+  List,
   Minus,
+  MonitorCog,
+  Moon,
   Pencil,
   Plus,
-  List,
   ScrollText,
+  Sun,
   Trash2,
   X,
 } from "lucide-react";
@@ -29,7 +32,10 @@ import { usePreferencia } from "@/lib/prefs";
 import { useSumario, type EstadoSumario } from "@/lib/use-sumario";
 import { Botao } from "@/components/ui";
 import { usePrompt } from "@/components/dialog-provider";
+import BotaoTema from "@/components/botao-tema";
+import { useTema, type Tema } from "@/lib/tema";
 import {
+  porMaisRecente,
   swatch,
   type Book,
   type Bookmark,
@@ -122,8 +128,7 @@ export default function Reader() {
           .from("highlights")
           .select("*")
           .eq("book_id", bookId)
-          .order("page", { ascending: true })
-          .order("created_at", { ascending: true }),
+          .order("created_at", { ascending: false }),
         supabase.from("bookmarks").select("*").eq("book_id", bookId).order("page", { ascending: true }),
       ]);
 
@@ -135,7 +140,12 @@ export default function Reader() {
       void salvarSnapshotLivro({ bookId, ...dados, atualizadoEm: Date.now() });
 
       const mesclado = await mesclarFilaLocal(bookId, dados.highlights, dados.bookmarks);
-      setEstado({ book: dados.book, ...mesclado, deDados: false });
+      setEstado({
+        book: dados.book,
+        ...mesclado,
+        highlights: porMaisRecente(mesclado.highlights),
+        deDados: false,
+      });
       setErro(null);
     } catch (e) {
       if (navigator.onLine) {
@@ -500,7 +510,7 @@ function ReaderCarregado({
       spans: sel.mode === "texto" ? sel.spans : [],
       created_at: new Date().toISOString(),
     };
-    setHighlights((h) => [...h, registro]);
+    setHighlights((h) => [registro, ...h]);
     await executarOuEnfileirar(supabase, `add:${registro.id}`, {
       tipo: "highlight_add",
       row: registro,
@@ -675,6 +685,8 @@ function ReaderCarregado({
                 <ChevronRight className="h-4 w-4" aria-hidden />
               </IconBtn>
             </div>
+
+            <BotaoTema />
 
             {!eEpub && <Segmento modo={modo} onModo={mudarModo} />}
 
@@ -912,6 +924,11 @@ function ReaderCarregado({
                     <List className="h-4 w-4 shrink-0" aria-hidden />
                     Escolher pelo sumário
                   </button>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-muted">Tema</p>
+                  <SeletorTema />
                 </div>
 
                 {!eEpub && (
@@ -1285,6 +1302,39 @@ function Segmento({
           }`}
         >
           <Icone className="h-4 w-4" aria-hidden />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Escolha do tema na folha do celular, no mesmo formato do "Como ler". */
+function SeletorTema() {
+  const { tema, definir } = useTema();
+
+  return (
+    <div
+      role="group"
+      aria-label="Tema"
+      className="flex w-full items-center gap-0.5 rounded-xl border border-border p-0.5"
+    >
+      {(
+        [
+          ["sistema", "Aparelho", MonitorCog],
+          ["claro", "Claro", Sun],
+          ["escuro", "Escuro", Moon],
+        ] as [Tema, string, typeof Sun][]
+      ).map(([k, label, Icone]) => (
+        <button
+          key={k}
+          onClick={() => definir(k)}
+          aria-pressed={tema === k}
+          className={`tap flex !min-h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition ${
+            tema === k ? "bg-accent/12 text-accent" : "text-muted hover:text-foreground"
+          }`}
+        >
+          <Icone className="h-4 w-4 shrink-0" aria-hidden />
           {label}
         </button>
       ))}

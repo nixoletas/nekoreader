@@ -2,6 +2,11 @@
 @import "react-pdf/dist/Page/TextLayer.css";
 @import "react-pdf/dist/Page/AnnotationLayer.css";
 
+/* As utilidades `dark:` do Tailwind seguem o tema escolhido, e não o do sistema —
+   senão elas contradiriam a escolha manual (texto vermelho escuro sobre fundo
+   escuro quando o aparelho está no claro e a pessoa pediu escuro). */
+@custom-variant dark (&:where([data-tema="escuro"], [data-tema="escuro"] *));
+
 /* ============================================================
    Paleta: papel, tinta e um vermelho de lombada antiga.
    ============================================================ */
@@ -19,19 +24,21 @@
   --shadow: 0 1px 2px rgba(60, 45, 25, 0.06), 0 8px 24px -12px rgba(60, 45, 25, 0.28);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #15120e;
-    --surface: #1e1a15;
-    --line: #322a21;
-    --ink: #ece2d0;
-    --ink-soft: #9d9285;
-    --accent: #e08a63;
-    --accent-soft: #c8734f;
-    --gold: #d8ab4e;
-    --grain: rgba(255, 250, 240, 0.028);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px -14px rgba(0, 0, 0, 0.8);
-  }
+/* O tema escuro entra por `data-tema="escuro"`, e não por `prefers-color-scheme`
+   direto: quem resolve "sistema" é um script no <head>, antes da primeira pintura.
+   Assim a escolha manual e a do sistema passam pelo mesmo caminho, e a pessoa pode
+   trocar de tema no meio da leitura sem que o sistema a contradiga. */
+:root[data-tema="escuro"] {
+  --paper: #15120e;
+  --surface: #1e1a15;
+  --line: #322a21;
+  --ink: #ece2d0;
+  --ink-soft: #9d9285;
+  --accent: #e08a63;
+  --accent-soft: #c8734f;
+  --gold: #d8ab4e;
+  --grain: rgba(255, 250, 240, 0.028);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px -14px rgba(0, 0, 0, 0.8);
 }
 
 @theme inline {
@@ -331,10 +338,8 @@ body {
   outline-offset: 1px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .txt-mark {
-    mix-blend-mode: screen;
-  }
+:root[data-tema="escuro"] .txt-mark {
+  mix-blend-mode: screen;
 }
 
 /* ---------- animações discretas ---------- */
@@ -354,25 +359,8 @@ body {
   animation: sobe 0.25s ease-out both;
 }
 
-/* Virada de página: o conteúdo novo entra em vez de aparecer estalado. */
-@keyframes folha-entra {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.folha {
-  animation: folha-entra 0.22s ease-out both;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .sobe,
-  .folha {
+  .sobe {
     animation: none;
   }
 }

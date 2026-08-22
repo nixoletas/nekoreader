@@ -5,7 +5,6 @@ import { Document, Page } from "react-pdf";
 import { Trash2, X } from "lucide-react";
 import { PDFJS_OPTIONS } from "@/lib/pdf";
 import { useSwipe } from "@/lib/swipe";
-import { useEntradaDaFolha } from "@/lib/anim";
 import { BarraProgresso } from "@/components/ui";
 import {
   HIGHLIGHT_LABEL,
@@ -45,12 +44,6 @@ export default function PdfCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  // Qual página já está desenhada na tela. Anima quando ela fica pronta, não
-  // quando é pedida: o react-pdf leva um instante, e animar antes disso faria a
-  // folha velha entrar. Guardar o número (e não um contador) é o que impede a
-  // animação de repetir a cada passo de zoom, que também redesenha a página.
-  const [desenhada, setDesenhada] = useState(0);
-  useEntradaDaFolha(pageRef, desenhada);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Highlight | null>(null);
@@ -171,7 +164,6 @@ export default function PdfCanvas({
             renderTextLayer
             renderAnnotationLayer={false}
             loading={<Esqueleto texto="" />}
-            onRenderSuccess={() => setDesenhada(pageNumber)}
           />
 
           {/* véu das marcações — sem z-index, senão o multiply não enxerga a página */}

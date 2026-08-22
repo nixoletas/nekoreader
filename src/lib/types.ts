@@ -87,6 +87,16 @@ export type Highlight = {
   created_at: string;
 };
 
+/**
+ * Marcações da mais recente pra mais antiga.
+ *
+ * O que a pessoa acabou de marcar é o que ela quer ver primeiro — a ordem da
+ * página só importaria se a lista fosse um índice do livro, e ela não é.
+ */
+export function porMaisRecente(hs: Highlight[]): Highlight[] {
+  return [...hs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export type Bookmark = {
   id: string;
   book_id: string;

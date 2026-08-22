@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BotaoTema from "@/components/botao-tema";
 import { limparTudoOffline, obterSnapshotEstante, salvarSnapshotEstante } from "@/lib/offline-db";
 import { useOnline } from "@/lib/use-offline";
 import BookCard from "@/components/book-card";
@@ -133,6 +134,8 @@ export default function Estante() {
             )}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-1">
+        <BotaoTema />
         <form
           action="/auth/signout"
           method="post"
@@ -149,6 +152,7 @@ export default function Estante() {
             Sair
           </button>
         </form>
+        </div>
       </header>
 
       <div className="rule mb-7" />
