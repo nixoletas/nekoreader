@@ -160,6 +160,9 @@ async function titulosDaPagina(
         alt: Math.abs(it.transform[3]) || it.height || 10,
         fonte,
         mono: conteudo.styles?.[fonte]?.fontFamily === "monospace",
+        // A varredura não resolve as fontes de verdade (custaria a lista de
+        // operadores de cada página); título não depende de itálico.
+        italico: false,
         espaco: !it.str.trim(),
       });
     }
