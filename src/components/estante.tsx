@@ -254,6 +254,7 @@ export default function Estante() {
                     coverUrl={b.cover_path ? (covers.get(b.cover_path) ?? null) : null}
                     highlightCount={contagem.get(b.id) ?? 0}
                     onExcluido={carregar}
+                    onAtualizado={carregar}
                   />
                 ))}
               </div>

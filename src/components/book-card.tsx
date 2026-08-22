@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Check, Download, Highlighter, Loader2, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, Download, Highlighter, ImageUp, Loader2, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatarTamanho } from "@/lib/format";
 import { useOfflineBook } from "@/lib/use-offline-book";
+import { trocarCapa } from "@/lib/trocar-capa";
 import { useAlert, useConfirm } from "@/components/dialog-provider";
 import type { Book } from "@/lib/types";
 
@@ -14,13 +15,17 @@ export default function BookCard({
   coverUrl,
   highlightCount,
   onExcluido,
+  onAtualizado,
 }: {
   book: Book;
   coverUrl: string | null;
   highlightCount: number;
   onExcluido: () => void;
+  onAtualizado: () => void;
 }) {
   const [removendo, setRemovendo] = useState(false);
+  const [trocandoCapa, setTrocandoCapa] = useState(false);
+  const capaRef = useRef<HTMLInputElement>(null);
   const offline = useOfflineBook(book);
   const confirmar = useConfirm();
   const alertar = useAlert();
@@ -69,6 +74,29 @@ export default function BookCard({
       return;
     }
     void offline.baixar();
+  }
+
+  async function escolherCapa(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    capaRef.current?.click();
+  }
+
+  async function aplicarCapa(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setTrocandoCapa(true);
+    try {
+      await trocarCapa(createClient(), book, arquivo);
+      onAtualizado();
+    } catch (err) {
+      await alertar({
+        titulo: "Não consegui trocar a capa",
+        mensagem: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setTrocandoCapa(false);
+      if (capaRef.current) capaRef.current.value = "";
+    }
   }
 
   return (
@@ -126,6 +154,14 @@ export default function BookCard({
         </p>
       </Link>
 
+      <input
+        ref={capaRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => void aplicarCapa(e.target.files?.[0])}
+      />
+
       <button
         onClick={excluir}
         disabled={removendo}
@@ -136,6 +172,20 @@ export default function BookCard({
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         ) : (
           <Trash2 className="h-4 w-4" aria-hidden />
+        )}
+      </button>
+
+      <button
+        onClick={escolherCapa}
+        disabled={trocandoCapa}
+        aria-label={`Trocar a capa de ${book.title}`}
+        title="Trocar a capa"
+        className="tap absolute right-1 top-12 !min-h-10 !min-w-10 rounded-full bg-black/45 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/65 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
+      >
+        {trocandoCapa ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <ImageUp className="h-4 w-4" aria-hidden />
         )}
       </button>
 
