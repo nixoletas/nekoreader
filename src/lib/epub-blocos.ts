@@ -14,6 +14,7 @@ export type Destaques = {
   texto: string;
   negrito: Faixa[];
   italico: Faixa[];
+  sobrescrito: Faixa[];
   links: Elo[];
 };
 
@@ -60,6 +61,8 @@ const IGNORADAS = new Set([
 const NEGRITO = new Set(["strong", "b", "mark"]);
 /** Ênfase e nome de obra: viram <em>. */
 const ITALICO = new Set(["em", "i", "cite", "var", "dfn", "address"]);
+/** Chamada de nota e expoente: continuam <sup>. */
+const SOBRESCRITO = new Set(["sup"]);
 
 /** Converte um capítulo inteiro em blocos, na ordem em que aparecem. */
 export function blocosDoCapitulo(
@@ -109,10 +112,10 @@ function percorrer(
 
   const fechar = () => {
     if (!solto.length) return;
-    const { texto, negrito, italico, links } = destaquesDeNos(solto);
+    const { texto, negrito, italico, sobrescrito, links } = destaquesDeNos(solto);
     solto = [];
     if (texto) {
-      blocos.push({ tipo: tipoDe(contexto), texto, negrito, italico, links });
+      blocos.push({ tipo: tipoDe(contexto), texto, negrito, italico, sobrescrito, links });
     }
   };
 
@@ -167,13 +170,14 @@ function percorrer(
 
     if (nome === "dt") {
       // Termo de uma lista de definição: é o título da entrada, então vai em negrito.
-      const { texto, italico, links } = comDestaques(filho);
+      const { texto, italico, sobrescrito, links } = comDestaques(filho);
       if (texto) {
         blocos.push({
           tipo: tipoDe(contexto),
           texto,
           negrito: [{ start: 0, end: texto.length }],
           italico,
+          sobrescrito,
           links,
         });
       }
@@ -186,8 +190,10 @@ function percorrer(
     // Contêiner (div, section, figure, ul...) ou folha de texto (p, dt, figcaption).
     if (temBlocoDentro(filho)) percorrer(filho, blocos, imagem, aqui);
     else {
-      const { texto, negrito, italico, links } = comDestaques(filho);
-      if (texto) blocos.push({ tipo: tipoDe(aqui), texto, negrito, italico, links });
+      const { texto, negrito, italico, sobrescrito, links } = comDestaques(filho);
+      if (texto) {
+        blocos.push({ tipo: tipoDe(aqui), texto, negrito, italico, sobrescrito, links });
+      }
     }
   }
 
@@ -208,7 +214,7 @@ function lerItemDeLista(
   const proprios = Array.from(el.childNodes).filter(
     (n) => !(n.nodeType === 1 && ["ul", "ol", "dl"].includes((n as Element).tagName.toLowerCase())),
   );
-  const { texto, negrito, italico, links } = destaquesDeNos(proprios);
+  const { texto, negrito, italico, sobrescrito, links } = destaquesDeNos(proprios);
   if (texto) {
     // O marcador entra na frente do texto, então as faixas andam dois caracteres.
     const desloca = <T extends Faixa>(f: T): T => ({ ...f, start: f.start + 2, end: f.end + 2 });
@@ -217,6 +223,7 @@ function lerItemDeLista(
       texto: `• ${texto}`,
       negrito: negrito.map(desloca),
       italico: italico.map(desloca),
+      sobrescrito: sobrescrito.map(desloca),
       links: links.map(desloca),
     });
   }
@@ -252,11 +259,17 @@ export function destaquesDeNos(nos: Node[]): Destaques {
   let texto = "";
   const negrito: Faixa[] = [];
   const italico: Faixa[] = [];
+  const sobrescrito: Faixa[] = [];
   const links: Elo[] = [];
 
   // `jaEm` evita faixa dentro de faixa: <strong>a <em>b</em></strong> já está
   // todo em negrito, e abrir uma segunda faixa de negrito por dentro não muda nada.
-  const visitar = (no: Node, jaEmNegrito: boolean, jaEmItalico: boolean) => {
+  const visitar = (
+    no: Node,
+    jaEmNegrito: boolean,
+    jaEmItalico: boolean,
+    jaEmSobrescrito: boolean,
+  ) => {
     if (no.nodeType === 3) {
       texto += no.nodeValue ?? "";
       return;
@@ -273,13 +286,17 @@ export function destaquesDeNos(nos: Node[]): Destaques {
 
     const ehNegrito = jaEmNegrito || NEGRITO.has(nome);
     const ehItalico = jaEmItalico || ITALICO.has(nome);
+    const ehSobrescrito = jaEmSobrescrito || SOBRESCRITO.has(nome);
     const inicio = texto.length;
     for (const filho of Array.from(elemento.childNodes)) {
-      visitar(filho, ehNegrito, ehItalico);
+      visitar(filho, ehNegrito, ehItalico, ehSobrescrito);
     }
     if (texto.length > inicio) {
       if (ehNegrito && !jaEmNegrito) negrito.push({ start: inicio, end: texto.length });
       if (ehItalico && !jaEmItalico) italico.push({ start: inicio, end: texto.length });
+      if (ehSobrescrito && !jaEmSobrescrito) {
+        sobrescrito.push({ start: inicio, end: texto.length });
+      }
       if (nome === "a") {
         const href = hrefExterno(elemento.getAttribute("href"));
         if (href) links.push({ start: inicio, end: texto.length, href });
@@ -287,11 +304,11 @@ export function destaquesDeNos(nos: Node[]): Destaques {
     }
   };
 
-  for (const no of nos) visitar(no, false, false);
+  for (const no of nos) visitar(no, false, false, false);
 
   // Espaço do XHTML é livre: o que vale é o texto já normalizado, e as faixas
   // precisam andar junto com ele.
-  return comAutolinks(normalizarEspacos(texto, negrito, italico, links));
+  return comAutolinks(normalizarEspacos(texto, negrito, italico, links, sobrescrito));
 }
 
 /**
@@ -338,6 +355,7 @@ export function normalizarEspacos(
   faixasNegrito: Faixa[],
   faixasItalico: Faixa[],
   faixasLinks: Elo[] = [],
+  faixasSobrescrito: Faixa[] = [],
 ): Destaques {
   // mapa[i] = onde o caractere i do texto bruto foi parar no texto final
   const mapa = new Int32Array(bruto.length + 1);
@@ -376,6 +394,7 @@ export function normalizarEspacos(
     texto,
     negrito: mover(faixasNegrito),
     italico: mover(faixasItalico),
+    sobrescrito: mover(faixasSobrescrito),
     links: mover(faixasLinks),
   };
 }

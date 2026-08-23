@@ -15,10 +15,10 @@ export type Elo = Faixa & { href: string };
 /** Um pedaço de conteúdo já remontado, pronto para virar <h2>, <p>, <pre>, <table> ou <img>. */
 export type Bloco =
   | { tipo: "titulo"; nivel: 1 | 2 | 3; texto: string }
-  | { tipo: "paragrafo"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
-  | { tipo: "citacao"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
+  | { tipo: "paragrafo"; texto: string; negrito: Faixa[]; italico: Faixa[]; sobrescrito: Faixa[]; links: Elo[] }
+  | { tipo: "citacao"; texto: string; negrito: Faixa[]; italico: Faixa[]; sobrescrito: Faixa[]; links: Elo[] }
   /** Nota de rodapé: mesmo texto corrido, só que em corpo menor e no pé da página. */
-  | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[]; links: Elo[] }
+  | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[]; sobrescrito: Faixa[]; links: Elo[] }
   | { tipo: "codigo"; texto: string }
   | { tipo: "tabela"; linhas: string[][] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
@@ -63,6 +63,8 @@ type Linha = {
   negrito: Faixa[];
   /** Trechos em itálico, na mesma contagem de caracteres. */
   italico: Faixa[];
+  /** Chamada de nota e expoente ("¹", "²"), na mesma contagem de caracteres. */
+  sobrescrito: Faixa[];
 };
 
 /** Como a linha vai ser tratada. */
@@ -209,10 +211,19 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
   return grupos
     .map((g) => {
       const emOrdem = semRepetidos([...g].sort((a, b) => a.x - b.x));
+      const cheios = g.filter((i) => !i.espaco);
+      const altLinha = mediana(cheios.map((i) => i.alt));
+      // Linha de base do corpo da linha — a régua contra a qual se mede quem está
+      // levantado. Sai só dos trechos em tamanho normal: a chamada de nota é
+      // justamente a exceção, e deixá-la entrar puxaria a régua pra cima dela.
+      const base = mediana(
+        cheios.filter((i) => i.alt >= altLinha * 0.9).map((i) => i.y),
+      );
       let texto = "";
       let anterior: Item | null = null;
       const negrito: Faixa[] = [];
       const italico: Faixa[] = [];
+      const sobrescrito: Faixa[] = [];
 
       // Trecho vizinho do mesmo tipo é emendado no anterior em vez de virar faixa
       // nova — senão "Data Governance: The Definitive Guide" viraria quatro <em>,
@@ -246,16 +257,22 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
         // Itálico vem do nome da fonte, não do tamanho: no corpo do texto ele usa
         // outra fonte com a mesma altura, então nenhuma medida geométrica o pega.
         if (it.italico) marcar(italico, inicio, texto.length);
+        // Chamada de nota ("...ETL tool.²") e expoente: letra menor **e** levantada
+        // acima da linha de base. O PDF não escreve isso em Unicode sobrescrito —
+        // é um "2" comum desenhado mais alto, e sem esta medida ele ia parar
+        // grudado na palavra, como se fosse parte dela ("tool.2").
+        if (it.alt <= altLinha * 0.85 && it.y >= base + altLinha * 0.2) {
+          marcar(sobrescrito, inicio, texto.length);
+        }
       }
       while (/\s$/.test(texto)) texto = texto.slice(0, -1);
 
-      const cheios = g.filter((i) => !i.espaco);
       const esq = Math.min(...cheios.map((i) => i.x));
-      const altLinha = mediana(cheios.map((i) => i.alt));
       return {
         texto,
         negrito,
         italico,
+        sobrescrito,
         x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
@@ -532,10 +549,17 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
       // Recuo só indica parágrafo novo no texto corrido — citação é recuada
       // inteira e item de lista tem recuo pendurado, senão cada linha deles
       // viraria um bloco.
+      //
+      // E recuo de parágrafo é da *primeira* linha: a de baixo volta pra margem.
+      // Por isso a linha anterior também precisa estar mais à esquerda. Sem essa
+      // parte, o corpo recuado de uma lista de definições ("Escalabilidade" em
+      // itálico na margem, a explicação recuada embaixo) quebrava linha a linha,
+      // cada uma virando um parágrafo — com o espaçamento de parágrafo entre elas.
       const recuo =
         classes[i].tipo === "paragrafo" &&
         !continuaItem &&
-        l.x > esquerda + corpo * 0.9;
+        l.x > esquerda + corpo * 0.9 &&
+        ant.x < l.x - corpo * 0.3;
       // Só vale pra texto corrido: em código quase toda linha acaba em ; ou },
       // e em tabela toda célula acaba "curta" — sem isso cada linha viraria um bloco.
       const encerrou =
@@ -577,6 +601,7 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
   let texto = "";
   const negrito: Faixa[] = [];
   const italico: Faixa[] = [];
+  const sobrescrito: Faixa[] = [];
   for (const l of linhas) {
     if (!texto) {
       texto = l.texto;
@@ -607,6 +632,7 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
     };
     transportar(l.negrito, negrito);
     transportar(l.italico, italico);
+    transportar(l.sobrescrito, sobrescrito);
   }
 
   // Título já é destacado por inteiro; marcar de novo por dentro seria redundante.
@@ -615,9 +641,10 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
   // O PDF guarda o endereço como texto comum; quem transforma em link é a leitura
   // do próprio texto. (No EPUB o <a href> vem escrito, e é ele que vale.)
   const links = acharLinks(texto);
-  if (classe.tipo === "citacao") return { tipo: "citacao", texto, negrito, italico, links };
-  if (classe.tipo === "nota") return { tipo: "nota", texto, negrito, italico, links };
-  return { tipo: "paragrafo", texto, negrito, italico, links };
+  const destaques = { texto, negrito, italico, sobrescrito, links };
+  if (classe.tipo === "citacao") return { tipo: "citacao", ...destaques };
+  if (classe.tipo === "nota") return { tipo: "nota", ...destaques };
+  return { tipo: "paragrafo", ...destaques };
 }
 
 /**

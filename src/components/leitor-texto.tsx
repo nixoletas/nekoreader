@@ -297,6 +297,7 @@ export default function LeitorTexto({
           ativa?.highlight.id ?? null,
           comEstilo ? b.negrito : [],
           comEstilo ? b.italico : [],
+          comEstilo ? b.sobrescrito : [],
           comEstilo ? b.links : [],
         );
         if (b.tipo === "codigo") {
@@ -383,8 +384,8 @@ export default function LeitorTexto({
 /* ---------------------------------------------------------------- */
 
 /**
- * Fatia o texto do bloco nos trechos marcados (<mark>), em negrito (<strong>) e
- * em itálico (<em>).
+ * Fatia o texto do bloco nos trechos marcados (<mark>), em negrito (<strong>),
+ * em itálico (<em>) e nas chamadas de nota levantadas da linha (<sup>).
  *
  * As três camadas se sobrepõem à vontade — marcar metade de uma palavra em
  * negrito, ou um título de livro em itálico dentro de uma frase marcada, é
@@ -398,6 +399,7 @@ function fatiarTexto(
   ativaId: string | null,
   negrito: Faixa[] = [],
   italico: Faixa[] = [],
+  sobrescrito: Faixa[] = [],
   links: Elo[] = [],
 ): React.ReactNode {
   const dentro = (f: Faixa) => ({
@@ -417,16 +419,23 @@ function fatiarTexto(
 
   const fortes = negrito.map(dentro).filter((f) => f.start < f.end);
   const inclinados = italico.map(dentro).filter((f) => f.start < f.end);
+  const elevados = sobrescrito.map(dentro).filter((f) => f.start < f.end);
   const enderecos = links
     .map((l) => ({ ...l, ...dentro(l) }))
     .filter((l) => l.start < l.end);
 
-  if (!trechos.length && !fortes.length && !inclinados.length && !enderecos.length) {
+  if (
+    !trechos.length &&
+    !fortes.length &&
+    !inclinados.length &&
+    !elevados.length &&
+    !enderecos.length
+  ) {
     return texto;
   }
 
   const pontos = new Set<number>([0, texto.length]);
-  for (const f of [...trechos, ...fortes, ...inclinados, ...enderecos]) {
+  for (const f of [...trechos, ...fortes, ...inclinados, ...elevados, ...enderecos]) {
     pontos.add(f.start);
     pontos.add(f.end);
   }
@@ -439,11 +448,13 @@ function fatiarTexto(
     if (ini >= fim) continue;
     const cobre = (f: Faixa) => f.start <= ini && f.end >= fim;
 
-    // De dentro pra fora: itálico, negrito, o link, e por último o véu da
-    // marcação — que precisa ficar por fora pra pintar tudo o que está dentro.
+    // De dentro pra fora: itálico, negrito, o sobrescrito, o link, e por último
+    // o véu da marcação — que precisa ficar por fora pra pintar tudo o que está
+    // dentro.
     let conteudo: React.ReactNode = texto.slice(ini, fim);
     if (inclinados.some(cobre)) conteudo = <em>{conteudo}</em>;
     if (fortes.some(cobre)) conteudo = <strong>{conteudo}</strong>;
+    if (elevados.some(cobre)) conteudo = <sup>{conteudo}</sup>;
 
     const endereco = enderecos.find(cobre);
     if (endereco) {

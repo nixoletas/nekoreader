@@ -151,6 +151,14 @@ body {
   font-style: italic;
 }
 
+/* Chamada de nota e expoente. `line-height: 0` é o que impede o número levantado
+   de abrir a entrelinha só na linha em que ele cai. */
+.leitura sup {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: super;
+}
+
 /* Endereço citado no texto ou na nota: sublinhado discreto, que só encorpa no
    toque/hover. Quebra em qualquer ponto pra URL comprida não estourar a coluna. */
 .leitura .elo {
