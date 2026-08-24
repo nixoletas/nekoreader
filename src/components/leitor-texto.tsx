@@ -260,6 +260,25 @@ export default function LeitorTexto({
             />
           );
         }
+        if (b.tipo === "sumario") {
+          // Sem `data-bloco`, pelo mesmo motivo da tabela: a marcação guarda
+          // posição por caractere num texto corrido, e aqui não existe um.
+          return (
+            <ul key={i} className="sumario-livro">
+              {b.entradas.map((e, k) => (
+                <li key={k} data-nivel={e.nivel}>
+                  <span className="titulo">{e.texto}</span>
+                  {e.pagina && (
+                    <>
+                      <span className="guia" aria-hidden />
+                      <span className="pagina">{e.pagina}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          );
+        }
         if (b.tipo === "tabela") {
           const [cabecalho, ...corpo] = b.linhas;
           // Sem `data-bloco`: a marcação guarda posição por caractere dentro do

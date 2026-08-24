@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Highlighter, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Highlighter, Pencil, StickyNote, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { obterSnapshotLivro } from "@/lib/offline-db";
 import { executarOuEnfileirar, mesclarFilaLocal } from "@/lib/offline-sync";
@@ -107,6 +107,26 @@ export default function MarcacoesBlog() {
     });
   }
 
+  async function anotar(id: string) {
+    const atual = highlights?.find((h) => h.id === id);
+    if (!atual) return;
+    const resposta = await perguntar({
+      titulo: atual.note ? "Editar nota" : "Escrever uma nota",
+      valor: atual.note ?? "",
+      placeholder: "O que este trecho te fez pensar?",
+      multilinha: true,
+      textoConfirmar: "Salvar",
+    });
+    if (resposta === null) return;
+    const note = resposta.trim() || null;
+    setHighlights((hs) => hs?.map((h) => (h.id === id ? { ...h, note } : h)) ?? null);
+    await executarOuEnfileirar(supabase, `nota:${id}`, {
+      tipo: "highlight_note",
+      id,
+      note,
+    });
+  }
+
   async function apagar(id: string) {
     setHighlights((hs) => hs?.filter((h) => h.id !== id) ?? null);
     await executarOuEnfileirar(supabase, `del:${id}`, { tipo: "highlight_del", id });
@@ -197,6 +217,16 @@ export default function MarcacoesBlog() {
                   </Link>
                   <span className="ml-auto flex opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                     <button
+                      onClick={() => anotar(h.id)}
+                      aria-label={h.note ? "Editar nota" : "Escrever uma nota"}
+                      title={h.note ? "Editar nota" : "Escrever uma nota"}
+                      className={`tap !min-h-9 !min-w-9 rounded-lg transition hover:text-accent ${
+                        h.note ? "text-accent" : "text-muted"
+                      }`}
+                    >
+                      <StickyNote className="h-4 w-4" aria-hidden />
+                    </button>
+                    <button
                       onClick={() => renomear(h.id)}
                       aria-label={h.title ? "Renomear marcação" : "Dar um título"}
                       className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-accent"
@@ -222,6 +252,12 @@ export default function MarcacoesBlog() {
                 <blockquote className="trecho mt-2">
                   {h.text || "(trecho sem texto)"}
                 </blockquote>
+
+                {/* A nota é a voz de quem leu — fica do lado de fora da citação,
+                    com a cara de bilhete escrito na margem. */}
+                {h.note && (
+                  <p className="nota-margem mt-3 whitespace-pre-line">{h.note}</p>
+                )}
               </article>
             ))}
           </div>

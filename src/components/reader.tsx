@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Highlighter,
+  LayoutGrid,
   List,
   Minus,
   MonitorCog,
@@ -19,6 +20,7 @@ import {
   Pencil,
   Plus,
   ScrollText,
+  StickyNote,
   Sun,
   Trash2,
   X,
@@ -29,9 +31,11 @@ import { obterPdfOffline, obterSnapshotLivro, salvarSnapshotLivro } from "@/lib/
 import { executarOuEnfileirar, mesclarFilaLocal, sincronizarFila } from "@/lib/offline-sync";
 import { useFilaPendente, useOnline } from "@/lib/use-offline";
 import { usePreferencia } from "@/lib/prefs";
+import { idDoDispositivo, nomeDoDispositivo } from "@/lib/dispositivo";
+import { haQuantoTempo } from "@/lib/format";
 import { useSumario, type EstadoSumario } from "@/lib/use-sumario";
 import { Botao } from "@/components/ui";
-import { usePrompt } from "@/components/dialog-provider";
+import { useConfirm, usePrompt } from "@/components/dialog-provider";
 import BotaoTema from "@/components/botao-tema";
 import { useTema, type Tema } from "@/lib/tema";
 import {
@@ -41,6 +45,7 @@ import {
   type Bookmark,
   type Highlight,
   type HighlightColor,
+  type PosicaoDispositivo,
   type Rect,
   type TextSpan,
 } from "@/lib/types";
@@ -58,6 +63,8 @@ const PdfText = dynamic(() => import("./pdf-text"), {
     <div className="mx-auto h-96 w-full max-w-[38rem] animate-pulse rounded-lg bg-surface" />
   ),
 });
+
+const VisaoPaginas = dynamic(() => import("./visao-paginas"), { ssr: false });
 
 const EpubText = dynamic(() => import("./epub-text"), {
   ssr: false,
@@ -77,6 +84,32 @@ const FONTE_MAX = 2.2;
 const CHAVE_MODO = "marginalia:modo";
 const CHAVE_FONTE = "marginalia:fonte";
 
+/**
+ * Página em que este aparelho parou, guardada nele mesmo.
+ *
+ * `books.last_page` é do livro, não do aparelho: ler no celular mexeria na
+ * página que o computador abre. Aqui cada aparelho continua de onde ele parou —
+ * e o pulo pro que o outro leu vira uma pergunta, não uma surpresa.
+ */
+const chavePaginaLocal = (bookId: string) => `marginalia:pagina:${bookId}`;
+
+function paginaLocal(bookId: string): number | null {
+  try {
+    const n = Number(localStorage.getItem(chavePaginaLocal(bookId)));
+    return Number.isFinite(n) && n >= 1 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarPaginaLocal(bookId: string, page: number): void {
+  try {
+    localStorage.setItem(chavePaginaLocal(bookId), String(page));
+  } catch {
+    // sem onde guardar (modo restrito): sobra a posição do servidor
+  }
+}
+
 /** Quanto da página já rolou, de 0 a 1. */
 function fracaoAtual(): number {
   const limite = document.documentElement.scrollHeight - window.innerHeight;
@@ -88,6 +121,8 @@ type EstadoLivro = {
   book: Book;
   highlights: Highlight[];
   bookmarks: Bookmark[];
+  /** Onde cada aparelho parou neste livro, do mais recente pro mais antigo. */
+  posicoes: PosicaoDispositivo[];
   deDados: boolean;
 };
 
@@ -123,14 +158,22 @@ export default function Reader() {
         .single();
       if (erroLivro || !book) throw erroLivro ?? new Error("Livro não encontrado.");
 
-      const [{ data: highlights }, { data: bookmarks }] = await Promise.all([
-        supabase
-          .from("highlights")
-          .select("*")
-          .eq("book_id", bookId)
-          .order("created_at", { ascending: false }),
-        supabase.from("bookmarks").select("*").eq("book_id", bookId).order("page", { ascending: true }),
-      ]);
+      const [{ data: highlights }, { data: bookmarks }, { data: posicoes }] =
+        await Promise.all([
+          supabase
+            .from("highlights")
+            .select("*")
+            .eq("book_id", bookId)
+            .order("created_at", { ascending: false }),
+          supabase.from("bookmarks").select("*").eq("book_id", bookId).order("page", { ascending: true }),
+          // Tabela nova: em banco que ainda não rodou a migração isto volta com
+          // erro, e a leitura segue sem a pergunta de "continuar do outro aparelho".
+          supabase
+            .from("reading_positions")
+            .select("*")
+            .eq("book_id", bookId)
+            .order("updated_at", { ascending: false }),
+        ]);
 
       const dados = {
         book: book as Book,
@@ -144,6 +187,7 @@ export default function Reader() {
         book: dados.book,
         ...mesclado,
         highlights: porMaisRecente(mesclado.highlights),
+        posicoes: (posicoes ?? []) as PosicaoDispositivo[],
         deDados: false,
       });
       setErro(null);
@@ -158,7 +202,8 @@ export default function Reader() {
       const salvo = await obterSnapshotLivro(bookId);
       if (salvo) {
         const mesclado = await mesclarFilaLocal(bookId, salvo.highlights, salvo.bookmarks);
-        setEstado({ book: salvo.book, ...mesclado, deDados: true });
+        // Offline não dá pra saber do outro aparelho — sobra a posição deste.
+        setEstado({ book: salvo.book, ...mesclado, posicoes: [], deDados: true });
         setErro(null);
       } else {
         setErro(
@@ -199,6 +244,7 @@ export default function Reader() {
       book={estado.book}
       initialHighlights={estado.highlights}
       initialBookmarks={estado.bookmarks}
+      posicoesRemotas={estado.posicoes}
     />
   );
 }
@@ -207,13 +253,20 @@ function ReaderCarregado({
   book,
   initialHighlights,
   initialBookmarks,
+  posicoesRemotas,
 }: {
   book: Book;
   initialHighlights: Highlight[];
   initialBookmarks: Bookmark[];
+  posicoesRemotas: PosicaoDispositivo[];
 }) {
   const [supabase] = useState(createClient);
   const perguntar = usePrompt();
+  const confirmar = useConfirm();
+  const [aparelho] = useState(() => ({
+    id: idDoDispositivo(),
+    nome: nomeDoDispositivo(),
+  }));
 
   // Arquivo do livro: se já foi baixado pra leitura offline, lê o blob local (funciona
   // sem internet e evita gastar rede à toa); senão pede a URL assinada de sempre.
@@ -258,16 +311,20 @@ function ReaderCarregado({
   // `?p=N` (vindo da página de marcações) manda pra página do trecho; sem ele,
   // abre onde a leitura parou.
   const paginaPedida = Number(useSearchParams().get("p"));
+  const veioDeLink = Number.isFinite(paginaPedida) && paginaPedida >= 1;
   const [page, setPage] = useState(
-    Number.isFinite(paginaPedida) && paginaPedida >= 1
+    veioDeLink
       ? paginaPedida
-      : Math.max(1, book.last_page || 1),
+      : // Este aparelho primeiro: `last_page` é do livro e pode ser de outro.
+        Math.max(1, paginaLocal(book.id) ?? book.last_page ?? 1),
   );
   const [zoom, setZoom] = useState(1);
   const [highlights, setHighlights] = useState<Highlight[]>(initialHighlights);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
   const [aba, setAba] = useState<Aba>("marcacoes");
   const [sheet, setSheet] = useState<Sheet>(null);
+  /** Grade com todas as páginas (tipo Kindle) por cima da leitura. */
+  const [vendoPaginas, setVendoPaginas] = useState(false);
   const [salvo, setSalvo] = useState(true);
   // preferências de leitura, lembradas entre livros
   // EPUB não tem folha pra desenhar — o texto remontado é a única leitura possível.
@@ -333,14 +390,30 @@ function ReaderCarregado({
       clearTimeout(salvarRef.current);
       salvarRef.current = null;
     }
-    return executarOuEnfileirar(supabase, `last_page:${book.id}`, {
-      tipo: "last_page",
-      bookId: book.id,
-      page: paginaRef.current,
-      lastReadAt: new Date().toISOString(),
-      positions: Object.fromEntries(posicoes),
-    });
-  }, [supabase, book.id, posicoes]);
+    const agora = new Date().toISOString();
+    const pagina = paginaRef.current;
+    guardarPaginaLocal(book.id, pagina);
+    return Promise.all([
+      executarOuEnfileirar(supabase, `last_page:${book.id}`, {
+        tipo: "last_page",
+        bookId: book.id,
+        page: pagina,
+        lastReadAt: agora,
+        positions: Object.fromEntries(posicoes),
+      }),
+      // Uma linha por aparelho — é o que a pergunta "continuar do celular?" lê.
+      executarOuEnfileirar(supabase, `posicao:${book.id}`, {
+        tipo: "posicao",
+        bookId: book.id,
+        userId: book.user_id,
+        deviceId: aparelho.id,
+        deviceName: aparelho.nome,
+        page: pagina,
+        fraction: posicoes.get(pagina) ?? 0,
+        updatedAt: agora,
+      }),
+    ]).then(() => undefined);
+  }, [supabase, book.id, book.user_id, posicoes, aparelho]);
 
   const agendarSalvar = useCallback(() => {
     if (salvarRef.current) clearTimeout(salvarRef.current);
@@ -466,6 +539,41 @@ function ReaderCarregado({
     };
   }, [page]);
 
+  /**
+   * "Você parou na página 87 no iPhone — continuar de lá?"
+   *
+   * Só pergunta quando o outro aparelho leu **depois** da última vez aqui: sem
+   * essa checagem, o computador ficaria oferecendo pra voltar a uma página que a
+   * pessoa já passou no celular semanas atrás. E nunca pergunta quando a página
+   * veio de um link (`?p=`) — ali o destino já foi escolhido.
+   */
+  const jaPerguntou = useRef(false);
+  useEffect(() => {
+    if (jaPerguntou.current || veioDeLink) return;
+    const quando = (p: PosicaoDispositivo) => Date.parse(p.updated_at) || 0;
+    const minha = posicoesRemotas.find((p) => p.device_id === aparelho.id);
+    // A lista vem do mais recente pro mais antigo: vale a leitura mais nova de
+    // outro aparelho, não qualquer uma que por acaso esteja em página diferente.
+    const outra = posicoesRemotas.find((p) => p.device_id !== aparelho.id);
+    if (!outra || outra.page === paginaRef.current) return;
+    if (minha && quando(minha) >= quando(outra)) return;
+
+    jaPerguntou.current = true;
+    void (async () => {
+      const rotulo = eEpub ? "capítulo" : "página";
+      const artigo = eEpub ? "o" : "a";
+      const sim = await confirmar({
+        titulo: `Continuar de onde você parou no ${outra.device_name}?`,
+        mensagem: `Lá a leitura está n${artigo} ${rotulo} ${outra.page} (${haQuantoTempo(outra.updated_at)}). Aqui você está n${artigo} ${rotulo} ${paginaRef.current}.`,
+        textoConfirmar: `Ir para ${artigo} ${rotulo} ${outra.page}`,
+        textoCancelar: "Ficar aqui",
+      });
+      if (!sim) return;
+      posicoes.set(outra.page, Math.max(0, Math.min(1, outra.fraction ?? 0)));
+      irPara(outra.page);
+    })();
+  }, [posicoesRemotas, aparelho.id, veioDeLink, confirmar, posicoes, irPara, eEpub]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const alvo = e.target as HTMLElement;
@@ -504,6 +612,7 @@ function ReaderCarregado({
       page,
       text: text.slice(0, 2000),
       title: null,
+      note: null,
       color,
       mode: sel.mode,
       rects: sel.mode === "pagina" ? sel.rects : [],
@@ -559,6 +668,29 @@ function ReaderCarregado({
     });
   }
 
+  /** Nota de leitura sobre o trecho — o que a pessoa pensou dele, não o que ele diz. */
+  async function anotarHighlight(id: string) {
+    const atual = highlights.find((h) => h.id === id);
+    if (!atual) return;
+    const resposta = await perguntar({
+      titulo: atual.note ? "Editar nota" : "Escrever uma nota",
+      mensagem: atual.text ? `“${atual.text.slice(0, 120)}…”` : undefined,
+      valor: atual.note ?? "",
+      placeholder: "O que este trecho te fez pensar?",
+      multilinha: true,
+      textoConfirmar: "Salvar",
+    });
+    if (resposta === null) return;
+
+    const note = resposta.trim() || null;
+    setHighlights((h) => h.map((x) => (x.id === id ? { ...x, note } : x)));
+    await executarOuEnfileirar(supabase, `nota:${id}`, {
+      tipo: "highlight_note",
+      id,
+      note,
+    });
+  }
+
   async function delBookmark(id: string) {
     setBookmarks((b) => b.filter((x) => x.id !== id));
     await executarOuEnfileirar(supabase, `bmdel:${id}`, { tipo: "bookmark_del", id });
@@ -602,6 +734,7 @@ function ReaderCarregado({
       }}
       onDelHighlight={delHighlight}
       onRenomear={renomearHighlight}
+      onAnotar={anotarHighlight}
       onDelBookmark={delBookmark}
       livroId={book.id}
     />
@@ -686,6 +819,13 @@ function ReaderCarregado({
               </IconBtn>
             </div>
 
+            <IconBtn
+              onClick={() => setVendoPaginas(true)}
+              label={eEpub ? "Ver todos os capítulos" : "Ver todas as páginas"}
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden />
+            </IconBtn>
+
             <BotaoTema />
 
             {!eEpub && <Segmento modo={modo} onModo={mudarModo} />}
@@ -756,7 +896,17 @@ function ReaderCarregado({
 
       <div className="flex flex-1 items-start">
         {/* ================= página ================= */}
-        <main className="min-w-0 flex-1 px-2 pb-32 pt-4 sm:px-6 sm:pb-10 sm:pt-6">
+        {/* Tocar na folga em volta da leitura abre a grade de páginas — é o
+            gesto do Kindle. O toque no texto continua sendo seleção: quem marca
+            trecho não pode ter a grade abrindo no meio do caminho. */}
+        <main
+          onClick={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (!window.getSelection()?.isCollapsed) return;
+            setVendoPaginas(true);
+          }}
+          className="min-w-0 flex-1 px-2 pb-32 pt-4 sm:px-6 sm:pb-10 sm:pt-6"
+        >
           {erroArquivo ? (
             <div className="mx-auto max-w-lg px-4 py-24 text-center">
               <p className="text-lg font-semibold">Não consegui abrir o arquivo</p>
@@ -816,7 +966,7 @@ function ReaderCarregado({
         </main>
 
         {/* ================= painel (desktop) ================= */}
-        <aside className="sticky top-[53px] hidden h-[calc(100dvh-53px)] w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-surface lg:flex">
+        <aside className="sticky top-[53px] hidden h-[calc(100dvh-53px)] w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-surface lg:flex xl:w-[22rem]">
           {painel}
         </aside>
       </div>
@@ -868,6 +1018,20 @@ function ReaderCarregado({
         </BarBtn>
       </nav>
 
+      {vendoPaginas && (
+        <VisaoPaginas
+          fileUrl={fileUrl}
+          numPages={numPages}
+          pagina={page}
+          eEpub={eEpub}
+          onIr={(p) => {
+            irPara(p);
+            setVendoPaginas(false);
+          }}
+          onFechar={() => setVendoPaginas(false)}
+        />
+      )}
+
       {/* ================= folhas (mobile) ================= */}
       {sheet && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal>
@@ -914,16 +1078,28 @@ function ReaderCarregado({
                       Pronto
                     </Botao>
                   </div>
-                  <button
-                    onClick={() => {
-                      setAba("sumario");
-                      setSheet("painel");
-                    }}
-                    className="tap mt-2 w-full justify-start rounded-xl border border-border px-4 text-sm font-medium text-muted transition active:bg-background"
-                  >
-                    <List className="h-4 w-4 shrink-0" aria-hidden />
-                    Escolher pelo sumário
-                  </button>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setSheet(null);
+                        setVendoPaginas(true);
+                      }}
+                      className="tap justify-start rounded-xl border border-border px-3 text-sm font-medium text-muted transition active:bg-background"
+                    >
+                      <LayoutGrid className="h-4 w-4 shrink-0" aria-hidden />
+                      Ver {eEpub ? "capítulos" : "páginas"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAba("sumario");
+                        setSheet("painel");
+                      }}
+                      className="tap justify-start rounded-xl border border-border px-3 text-sm font-medium text-muted transition active:bg-background"
+                    >
+                      <List className="h-4 w-4 shrink-0" aria-hidden />
+                      Sumário
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -1032,6 +1208,7 @@ function Painel({
   onIr,
   onDelHighlight,
   onRenomear,
+  onAnotar,
   onDelBookmark,
   livroId,
 }: {
@@ -1046,6 +1223,7 @@ function Painel({
   onIr: (p: number) => void;
   onDelHighlight: (id: string) => void;
   onRenomear: (id: string) => void;
+  onAnotar: (id: string) => void;
   onDelBookmark: (id: string) => void;
   livroId: string;
 }) {
@@ -1113,8 +1291,24 @@ function Painel({
                     <p className="mt-0.5 line-clamp-4 text-sm leading-snug">
                       {h.text || "(trecho sem texto)"}
                     </p>
+                    {h.note && (
+                      <p className="mt-1.5 flex gap-1.5 border-l-2 border-accent/40 pl-2 text-[13px] leading-snug text-muted">
+                        <StickyNote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                        <span className="line-clamp-3 whitespace-pre-line">{h.note}</span>
+                      </p>
+                    )}
                   </button>
                   <div className="flex shrink-0 flex-col">
+                    <button
+                      onClick={() => onAnotar(h.id)}
+                      aria-label={h.note ? "Editar nota" : "Escrever uma nota"}
+                      title={h.note ? "Editar nota" : "Escrever uma nota"}
+                      className={`tap !min-h-9 !min-w-9 rounded-lg transition hover:text-accent ${
+                        h.note ? "text-accent" : "text-muted"
+                      }`}
+                    >
+                      <StickyNote className="h-4 w-4" aria-hidden />
+                    </button>
                     <button
                       onClick={() => onRenomear(h.id)}
                       aria-label={h.title ? "Renomear marcação" : "Dar um título"}
@@ -1229,40 +1423,69 @@ function Sumario({
   });
 
   return (
-    <ul className="py-1">
+    <ul className="py-1.5">
       {itens.map((item, i) => {
-        const recuo = ["pl-3", "pl-7", "pl-11"][item.nivel - 1] ?? "pl-11";
-        if (item.pagina === null) {
-          return (
-            <li
-              key={`${i}-${item.titulo}`}
-              className={`${recuo} py-2 pr-3 text-sm leading-snug text-muted/60`}
-              title="Não deu pra descobrir em que página começa"
+        const nivel = Math.min(3, Math.max(1, item.nivel));
+        const ehAtual = i === atual;
+        const semPagina = item.pagina === null;
+        // Recuo em em, não em classe fixa: na coluna estreita do painel um
+        // `pl-11` sobrava pouco pra frase e o título quebrava em escada.
+        const recuo = { paddingLeft: `${0.75 + (nivel - 1) * 0.85}rem` };
+
+        // Mesma grade nos três casos — título que quebra em várias linhas de um
+        // lado, número numa coluna própria do outro. É isso que mantém os números
+        // alinhados e impede o título comprido de empurrar a página pra fora.
+        const linha = (
+          <>
+            <span
+              className={`min-w-0 break-words leading-snug ${
+                nivel === 1
+                  ? "text-[13.5px] font-semibold"
+                  : nivel === 2
+                    ? "text-[13px]"
+                    : "text-[12.5px] text-muted"
+              } ${semPagina ? "text-muted/60" : ""}`}
             >
               {item.titulo}
-            </li>
-          );
-        }
-        return (
-          <li key={`${i}-${item.titulo}`}>
-            <button
-              onClick={() => onIr(item.pagina as number)}
-              className={`${recuo} flex w-full items-baseline gap-2 py-2 pr-3 text-left transition hover:bg-background ${
-                i === atual ? "bg-accent/8 text-accent" : ""
+            </span>
+            <span
+              className={`pt-px text-right text-[11px] tabular-nums ${
+                ehAtual ? "text-accent" : "text-muted/70"
               }`}
-              aria-current={i === atual ? "true" : undefined}
+              aria-hidden={semPagina}
             >
-              <span
-                className={`min-w-0 flex-1 text-sm leading-snug ${
-                  item.nivel === 1 ? "font-semibold" : ""
+              {item.pagina ?? "·"}
+            </span>
+          </>
+        );
+
+        const grade =
+          "grid grid-cols-[minmax(0,1fr)_1.75rem] items-start gap-2 py-2 pr-3 text-left";
+
+        return (
+          <li key={`${i}-${item.titulo}`} className={nivel === 1 && i > 0 ? "mt-1" : ""}>
+            {semPagina ? (
+              <div
+                style={recuo}
+                className={`${grade} cursor-default`}
+                title="Não deu pra descobrir em que página começa"
+              >
+                {linha}
+              </div>
+            ) : (
+              <button
+                onClick={() => onIr(item.pagina as number)}
+                style={recuo}
+                aria-current={ehAtual ? "true" : undefined}
+                className={`${grade} w-full transition hover:bg-background ${
+                  ehAtual
+                    ? "bg-accent/10 text-accent shadow-[inset_2px_0_0_var(--accent)]"
+                    : ""
                 }`}
               >
-                {item.titulo}
-              </span>
-              <span className="shrink-0 text-xs tabular-nums text-muted">
-                {item.pagina}
-              </span>
-            </button>
+                {linha}
+              </button>
+            )}
           </li>
         );
       })}

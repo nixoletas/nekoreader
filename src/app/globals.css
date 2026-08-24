@@ -244,6 +244,72 @@ body {
   tab-size: 2;
 }
 
+/* ---------- sumário impresso no livro ---------- */
+/* A página de sumário do próprio livro, remontada. O pontilhado do papel vira
+   uma régua de verdade (a linha que leva o olho até o número) em vez dos
+   duzentos pontos que o PDF escreve — que, no reflow, viravam um muro de texto.
+
+   Hierarquia é recuo e peso, nunca cor: nível 3 mais claro deixava a lista
+   preta-apagada-preta, parecendo defeito em vez de estrutura. Só o número da
+   página recua pro tom secundário, porque ele é referência, não leitura. */
+
+.leitura .sumario-livro {
+  margin: 1.2em 0;
+  text-align: left;
+  hyphens: none;
+}
+
+.leitura .sumario-livro + .sumario-livro {
+  margin-top: -0.9em;
+}
+
+.leitura .sumario-livro li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  padding: 0.2em 0;
+  line-height: 1.5;
+}
+
+.leitura .sumario-livro li[data-nivel="1"] {
+  margin-top: 0.7em;
+  font-weight: 600;
+}
+
+.leitura .sumario-livro li[data-nivel="1"]:first-child {
+  margin-top: 0;
+}
+
+.leitura .sumario-livro li[data-nivel="2"] {
+  padding-left: 1.2em;
+}
+
+.leitura .sumario-livro li[data-nivel="3"] {
+  padding-left: 2.4em;
+  font-size: 0.96em;
+}
+
+/* Encolhe antes da régua: título comprido quebra em linha, não empurra o número. */
+.leitura .sumario-livro .titulo {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* A régua: ocupa o vão que sobrar, e some quando não sobra nada. */
+.leitura .sumario-livro .guia {
+  flex: 1 1 1.5em;
+  min-width: 0.75em;
+  align-self: center;
+  border-bottom: 1px dotted color-mix(in srgb, var(--ink-soft) 55%, transparent);
+}
+
+.leitura .sumario-livro .pagina {
+  flex: 0 0 auto;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
 /* ---------- tabela ---------- */
 
 .tabela-rolagem {
@@ -282,6 +348,17 @@ body {
   text-wrap: pretty;
   padding-left: 1.1em;
   border-left: 2px solid var(--line);
+}
+
+/* Nota escrita pela pessoa sobre um trecho marcado: bilhete de margem, não
+   citação — por isso o fundo em vez do filete que o trecho já usa. */
+.nota-margem {
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--ink);
 }
 
 /* ---------- balão de ações da seleção ---------- */

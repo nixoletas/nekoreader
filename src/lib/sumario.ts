@@ -42,8 +42,10 @@ export type TituloAchado = { texto: string; nivel: number; pagina: number };
  */
 export function limparTitulo(bruto: string): string {
   const limpo = saneiaLigaduras(bruto.normalize("NFKC"))
-    // pontilhado de sumário impresso, com ou sem espaço entre os pontos
-    .replace(/[.·•…\s]{4,}\d{1,4}\s*$/u, "")
+    // Pontilhado de sumário impresso, com ou sem espaço entre os pontos. O número
+    // pode ser romano ("Prefácio ....... xix"): as páginas de abertura são. Exigir
+    // 4+ caracteres de guia é o que protege "Parte II", que tem um espaço só.
+    .replace(/[.·•…\s]{4,}(?:\d{1,4}|[ivxlcdm]{1,7})\s*$/iu, "")
     .replace(/\s+/g, " ")
     .trim();
   // sobrou só a numeração solta? não é título.

@@ -147,7 +147,7 @@ export type SumarioGuardado = {
   atualizadoEm: number;
 };
 
-export const VERSAO_SUMARIO = 1;
+export const VERSAO_SUMARIO = 2;
 
 export async function salvarSumario(bookId: string, itens: ItemSumario[]): Promise<void> {
   const db = await abrirDb();
@@ -181,8 +181,19 @@ export type OpFila =
       /** Opcional: item enfileirado por uma versão antiga do app não tem esse campo. */
       positions?: Record<string, number>;
     }
+  | {
+      tipo: "posicao";
+      bookId: string;
+      deviceId: string;
+      deviceName: string;
+      page: number;
+      fraction: number;
+      updatedAt: string;
+      userId: string;
+    }
   | { tipo: "highlight_add"; row: Record<string, unknown> }
   | { tipo: "highlight_title"; id: string; title: string | null }
+  | { tipo: "highlight_note"; id: string; note: string | null }
   | { tipo: "highlight_del"; id: string }
   | { tipo: "bookmark_add"; row: Record<string, unknown> }
   | { tipo: "bookmark_del"; id: string };

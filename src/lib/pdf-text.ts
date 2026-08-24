@@ -76,6 +76,7 @@ export async function extrairBlocos(
         (b) =>
           b.tipo === "imagem" ||
           b.tipo === "tabela" ||
+          b.tipo === "sumario" ||
           !/^\d{1,4}$/.test(b.texto),
       )
     : blocos;

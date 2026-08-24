@@ -16,6 +16,10 @@ type OpcoesTexto = Opcoes & {
   /** Valor que já vem preenchido no campo. */
   valor?: string;
   placeholder?: string;
+  /** Texto de vários parágrafos (nota de leitura) em vez de uma linha só. */
+  multilinha?: boolean;
+  /** Quantos caracteres cabem. Padrão: 120 numa linha, 4000 em várias. */
+  limite?: number;
 };
 
 type Modo = "confirmar" | "avisar" | "perguntar";
@@ -44,7 +48,10 @@ export function useAlert(): AlertFn {
   return fn;
 }
 
-/** Substitui `window.prompt` — pede um texto curto (título de marcação, por exemplo). */
+/**
+ * Substitui `window.prompt` — pede um texto curto (título de marcação) ou, com
+ * `multilinha`, um texto de vários parágrafos (nota sobre o trecho).
+ */
 export function usePrompt(): PromptFn {
   const fn = useContext(PromptContext);
   if (!fn) throw new Error("usePrompt precisa estar dentro de <DialogProvider>");
@@ -118,16 +125,28 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   </p>
                 )}
 
-                {ehPergunta && (
-                  <input
-                    autoFocus
-                    value={texto}
-                    onChange={(e) => setTexto(e.target.value)}
-                    placeholder={estado.placeholder}
-                    maxLength={120}
-                    className="mt-4 h-12 w-full rounded-xl border border-border bg-background px-4 text-base outline-none transition placeholder:text-muted/60 focus:border-accent focus:ring-4 focus:ring-accent/12"
-                  />
-                )}
+                {ehPergunta &&
+                  (estado.multilinha ? (
+                    <textarea
+                      autoFocus
+                      value={texto}
+                      onChange={(e) => setTexto(e.target.value)}
+                      placeholder={estado.placeholder}
+                      maxLength={estado.limite ?? 4000}
+                      rows={5}
+                      // Enter serve pra parágrafo aqui; quem confirma é o botão.
+                      className="mt-4 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 text-base leading-relaxed outline-none transition placeholder:text-muted/60 focus:border-accent focus:ring-4 focus:ring-accent/12"
+                    />
+                  ) : (
+                    <input
+                      autoFocus
+                      value={texto}
+                      onChange={(e) => setTexto(e.target.value)}
+                      placeholder={estado.placeholder}
+                      maxLength={estado.limite ?? 120}
+                      className="mt-4 h-12 w-full rounded-xl border border-border bg-background px-4 text-base outline-none transition placeholder:text-muted/60 focus:border-accent focus:ring-4 focus:ring-accent/12"
+                    />
+                  ))}
 
                 <div className="mt-6 flex gap-2">
                   {estado.modo !== "avisar" && (

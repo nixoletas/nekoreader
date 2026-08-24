@@ -39,6 +39,8 @@ create table if not exists public.highlights (
   text        text,
   -- título dado pela pessoa à marcação (opcional)
   title       text,
+  -- nota escrita pela pessoa sobre o trecho (opcional, texto longo)
+  note        text,
   color       text not null default 'yellow',
   -- modo em que a marcação foi feita: 'pagina' (imagem do pdf) ou 'texto' (remontado)
   mode        text not null default 'pagina',
@@ -55,6 +57,8 @@ alter table public.highlights add column if not exists spans jsonb not null defa
 alter table public.highlights alter column rects set default '[]'::jsonb;
 -- título dado pela pessoa à marcação (opcional)
 alter table public.highlights add column if not exists title text;
+-- nota escrita pela pessoa sobre o trecho (opcional)
+alter table public.highlights add column if not exists note text;
 
 create index if not exists highlights_book_idx on public.highlights (book_id, page);
 
@@ -70,11 +74,33 @@ create table if not exists public.bookmarks (
 
 create index if not exists bookmarks_book_idx on public.bookmarks (book_id, page);
 
+-- Onde a leitura parou **em cada aparelho**. `books.last_page` continua sendo a
+-- posição mais recente do livro (é ela que a estante mostra); esta tabela é o que
+-- permite abrir no celular onde o celular parou e ainda assim oferecer "continuar
+-- de onde você parou no computador".
+create table if not exists public.reading_positions (
+  book_id      uuid not null references public.books (id) on delete cascade,
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  -- id sorteado no aparelho e guardado nele (localStorage) — não identifica pessoa
+  device_id    text not null,
+  -- nome legível deduzido do navegador: "Chrome no Windows", "Safari no iPhone"
+  device_name  text not null default 'Aparelho',
+  page         int  not null default 1,
+  -- fração (0..1) da rolagem dentro da página, do mesmo jeito que `books.positions`
+  fraction     real not null default 0,
+  updated_at   timestamptz not null default now(),
+  primary key (book_id, device_id)
+);
+
+create index if not exists reading_positions_book_idx
+  on public.reading_positions (book_id, updated_at desc);
+
 -- ---------- Row Level Security ----------
 
 alter table public.books      enable row level security;
 alter table public.highlights enable row level security;
 alter table public.bookmarks  enable row level security;
+alter table public.reading_positions enable row level security;
 
 drop policy if exists "books: dono faz tudo" on public.books;
 create policy "books: dono faz tudo" on public.books
@@ -86,6 +112,10 @@ create policy "highlights: dono faz tudo" on public.highlights
 
 drop policy if exists "bookmarks: dono faz tudo" on public.bookmarks;
 create policy "bookmarks: dono faz tudo" on public.bookmarks
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "reading_positions: dono faz tudo" on public.reading_positions;
+create policy "reading_positions: dono faz tudo" on public.reading_positions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------- Storage ----------

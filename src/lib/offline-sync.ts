@@ -6,6 +6,26 @@ import type { Bookmark, Highlight } from "@/lib/types";
 
 type Supabase = ReturnType<typeof createClient>;
 
+/**
+ * O banco ainda não tem a tabela/coluna que esta operação usa — quer dizer que a
+ * migração do `supabase/schema.sql` não rodou.
+ *
+ * Isso não pode virar erro de fila: ela para no primeiro que falha, e uma nota
+ * (ou uma posição de leitura) seguraria marcação e progresso atrás dela pra
+ * sempre. Melhor perder a novidade até a migração rodar do que travar o resto.
+ *
+ * 42P01/42703 = relação ou coluna inexistente (Postgres); PGRST204/205 = a mesma
+ * coisa vista pelo cache de schema do PostgREST.
+ */
+function esquemaAusente(error: { code?: string }): boolean {
+  return (
+    error.code === "42P01" ||
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    error.code === "PGRST205"
+  );
+}
+
 async function executar(supabase: Supabase, op: OpFila): Promise<void> {
   switch (op.tipo) {
     case "last_page": {
@@ -20,6 +40,23 @@ async function executar(supabase: Supabase, op: OpFila): Promise<void> {
       if (error) throw error;
       return;
     }
+    case "posicao": {
+      // Uma linha por (livro, aparelho): reenviar só reescreve a posição dele.
+      const { error } = await supabase.from("reading_positions").upsert(
+        {
+          book_id: op.bookId,
+          user_id: op.userId,
+          device_id: op.deviceId,
+          device_name: op.deviceName,
+          page: op.page,
+          fraction: op.fraction,
+          updated_at: op.updatedAt,
+        },
+        { onConflict: "book_id,device_id" },
+      );
+      if (error && !esquemaAusente(error)) throw error;
+      return;
+    }
     case "highlight_add": {
       // 23505 = já existe (reenvio de uma sincronização anterior que caiu no meio) — ok, segue.
       const { error } = await supabase.from("highlights").insert(op.row);
@@ -32,6 +69,14 @@ async function executar(supabase: Supabase, op: OpFila): Promise<void> {
         .update({ title: op.title })
         .eq("id", op.id);
       if (error) throw error;
+      return;
+    }
+    case "highlight_note": {
+      const { error } = await supabase
+        .from("highlights")
+        .update({ note: op.note })
+        .eq("id", op.id);
+      if (error && !esquemaAusente(error)) throw error;
       return;
     }
     case "highlight_del": {
@@ -99,6 +144,9 @@ export async function mesclarFilaLocal(
       case "highlight_title":
         hl = hl.map((h) => (h.id === op.id ? { ...h, title: op.title } : h));
         break;
+      case "highlight_note":
+        hl = hl.map((h) => (h.id === op.id ? { ...h, note: op.note } : h));
+        break;
       case "highlight_del":
         hl = hl.filter((h) => h.id !== op.id);
         break;
@@ -111,6 +159,7 @@ export async function mesclarFilaLocal(
         bm = bm.filter((b) => b.id !== op.id);
         break;
       case "last_page":
+      case "posicao":
         break;
     }
   }

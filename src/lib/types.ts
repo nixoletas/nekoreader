@@ -78,6 +78,8 @@ export type Highlight = {
   text: string | null;
   /** Título dado pela pessoa à marcação — opcional. */
   title: string | null;
+  /** Nota escrita pela pessoa sobre o trecho — opcional, texto longo. */
+  note: string | null;
   color: HighlightColor;
   mode: HighlightMode;
   /** Usado no modo página — vazio no modo texto. */
@@ -104,4 +106,22 @@ export type Bookmark = {
   page: number;
   label: string | null;
   created_at: string;
+};
+
+/**
+ * Onde a leitura parou num aparelho específico.
+ *
+ * `books.last_page` guarda a posição mais recente do livro, venha de onde vier —
+ * é o que a estante mostra. Isto aqui é por aparelho, e é o que permite abrir o
+ * celular onde o celular parou e ainda assim oferecer "continuar do computador".
+ */
+export type PosicaoDispositivo = {
+  book_id: string;
+  user_id: string;
+  device_id: string;
+  device_name: string;
+  page: number;
+  /** Fração (0..1) da rolagem dentro da página. */
+  fraction: number;
+  updated_at: string;
 };

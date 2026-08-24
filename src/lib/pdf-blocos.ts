@@ -21,7 +21,18 @@ export type Bloco =
   | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[]; sobrescrito: Faixa[]; links: Elo[] }
   | { tipo: "codigo"; texto: string }
   | { tipo: "tabela"; linhas: string[][] }
+  /** Página de sumário impressa no próprio livro ("Prefácio ....... xix"). */
+  | { tipo: "sumario"; entradas: EntradaSumario[] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
+
+/** Uma linha da página de sumário: o título de um lado, a página do outro. */
+export type EntradaSumario = {
+  texto: string;
+  /** Como está impresso — pode ser romano ("xix"). Vazio quando a linha não traz. */
+  pagina: string;
+  /** 1 = capítulo, 2 = seção, 3 = subseção. Vem do recuo da linha. */
+  nivel: 1 | 2 | 3;
+};
 
 /** Bloco com a posição vertical (pt) que ele ocupava na página — só pra encaixar as imagens. */
 export type BlocoPosicionado = { y: number; bloco: Bloco };
@@ -74,7 +85,8 @@ type Classe =
   | { tipo: "citacao" }
   | { tipo: "nota" }
   | { tipo: "codigo" }
-  | { tipo: "tabela" };
+  | { tipo: "tabela" }
+  | { tipo: "sumario" };
 
 /**
  * Itens de texto da página → blocos, uma lista por coluna.
@@ -464,6 +476,122 @@ function marcarTabelas(linhas: Linha[], classes: Classe[], corpo: number): void 
 }
 
 /**
+ * Uma linha da página de sumário impressa: "Prefácio ......... xix".
+ *
+ * O que denuncia é o **guia** — a corrida de pontos que leva o olho até o número
+ * do outro lado da linha. Guia só de espaço também existe, mas aí a linha fica
+ * parecida demais com texto justificado, então ali exige número arábico e um vão
+ * bem largo. O número pode ser romano: as páginas de abertura do livro são.
+ */
+const ENTRADA_SUMARIO = /^(.*?[^\s.·•…_-])([.·•…_\-–—\s]{3,})([\divxlcdm]{1,7})$/i;
+
+/** O número da página como o livro imprime: 30 ou xix. */
+function ehNumeroDePagina(s: string): boolean {
+  return /^\d{1,4}$/.test(s) || /^[ivxlcdm]{1,7}$/i.test(s);
+}
+
+/** Título com miolo de verdade — ". . . . 30" sozinho não é entrada de nada. */
+function temTitulo(s: string): boolean {
+  return s.replace(/[^0-9A-Za-zÀ-ÿ]/g, "").length >= 2;
+}
+
+export function entradaDeSumario(
+  texto: string,
+): { titulo: string; pagina: string; pontilhada: boolean } | null {
+  const achado = ENTRADA_SUMARIO.exec(texto.trim());
+  if (!achado) return null;
+  const [, titulo, guia, pagina] = achado;
+
+  const pontos = (guia.match(/[.·•…_\-–—]/g) ?? []).length;
+  if (!ehNumeroDePagina(pagina) || !temTitulo(titulo)) return null;
+  if (pontos < 2) return null;
+
+  return { titulo: titulo.trim(), pagina, pontilhada: true };
+}
+
+/**
+ * A mesma entrada, quando o guia é só espaço em branco.
+ *
+ * Aqui o texto da linha não denuncia nada — a remontagem já colapsou o vão num
+ * espaço só. Quem sabe do buraco é a divisão em células, a mesma que acha coluna
+ * de tabela. Por isso esta forma nunca vale sozinha: só entra em leva que já tem
+ * pelo menos uma linha pontilhada (ver `marcarSumario`), senão qualquer tabela
+ * de duas colunas com número à direita viraria sumário.
+ */
+function entradaPorCelulas(
+  l: Linha,
+): { titulo: string; pagina: string; pontilhada: boolean } | null {
+  if (l.celulas.length !== 2) return null;
+  const [titulo, pagina] = l.celulas;
+  if (pagina.x - titulo.dir < l.alt * 1.5) return null;
+  if (!ehNumeroDePagina(pagina.texto) || !temTitulo(titulo.texto)) return null;
+  return {
+    titulo: titulo.texto.replace(/[\s.·•…_-]+$/, "").trim(),
+    pagina: pagina.texto,
+    pontilhada: false,
+  };
+}
+
+/** Entrada de sumário nesta linha, pelo pontilhado ou pelo vão. */
+function entradaDaLinha(l: Linha) {
+  return entradaDeSumario(l.texto) ?? entradaPorCelulas(l);
+}
+
+/**
+ * Marca as linhas que formam a página de sumário impressa no livro.
+ *
+ * Uma linha solta que acaba em número não é sumário (é o fim de um parágrafo com
+ * uma citação numérica); o que denuncia é a **sequência** — três ou mais linhas
+ * seguidas com o mesmo desenho. Uma linha sem número no meio da leva é a
+ * continuação de um título comprido, e entra junto.
+ */
+function marcarSumario(linhas: Linha[], classes: Classe[]): void {
+  const MINIMO = 3;
+  const entradas = linhas.map((l) => entradaDaLinha(l));
+  const corrido = (i: number) =>
+    classes[i].tipo === "paragrafo" || classes[i].tipo === "citacao";
+  // A linha de capítulo do sumário vem na fonte de destaque do livro, então
+  // `classificar` já chamou ela de título. Ela entra assim mesmo — o que a
+  // qualifica é ter pontilhado e número, e o título de verdade da página
+  // ("Sumário") não tem nenhum dos dois, então continua de fora.
+  const entrada = (i: number) =>
+    !!entradas[i] && (corrido(i) || classes[i].tipo === "titulo");
+
+  let i = 0;
+  while (i < linhas.length) {
+    if (!entrada(i)) {
+      i++;
+      continue;
+    }
+    let fim = i;
+    while (fim + 1 < linhas.length) {
+      if (entrada(fim + 1)) {
+        fim++;
+        continue;
+      }
+      // Linha sem número só entra se for continuação de um título comprido: a
+      // de baixo volta a ser entrada, e ela mesma é texto corrido.
+      if (corrido(fim + 1) && fim + 2 < linhas.length && entrada(fim + 2)) {
+        fim += 2;
+        continue;
+      }
+      break;
+    }
+
+    // Pelo menos uma linha pontilhada na leva: é o que separa sumário de tabela
+    // de duas colunas com número à direita.
+    let pontilhada = false;
+    for (let k = i; k <= fim; k++) if (entradas[k]?.pontilhada) pontilhada = true;
+
+
+    if (fim - i + 1 >= MINIMO && pontilhada) {
+      for (let k = i; k <= fim; k++) classes[k] = { tipo: "sumario" };
+    }
+    i = fim + 1;
+  }
+}
+
+/**
  * Marca as notas de rodapé no pé da coluna.
  *
  * O sinal é a combinação de três coisas, que juntas não acontecem no meio do
@@ -516,6 +644,9 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   const esquerda = mediana(linhas.map((l) => l.x));
   const largura = mediana(linhas.map((l) => l.dir - l.x));
   const classes = linhas.map((l) => classificar(l, corpo, esquerda));
+  // Antes da tabela: entrada de sumário também quebra em duas colunas, e sem
+  // isto a página inteira de sumário viraria uma tabela de duas colunas.
+  marcarSumario(linhas, classes);
   marcarTabelas(linhas, classes, corpo);
   // Depois da tabela: uma tabela no pé da página é tabela, não nota.
   marcarNotas(linhas, classes, corpo);
@@ -545,7 +676,13 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
     const ant = linhas[i - 1];
     if (ant) {
       const vao = ant.y - l.y;
-      const salto = vao > Math.max(ant.alt, l.alt) * 1.7;
+      // O branco entre um capítulo e outro dentro da página de sumário não abre
+      // bloco novo: o nível de cada entrada é medido contra a margem da leva
+      // inteira, e partir ela faria a primeira seção de cada pedaço virar
+      // capítulo.
+      const doisSumarios =
+        classes[i].tipo === "sumario" && classes[i - 1].tipo === "sumario";
+      const salto = !doisSumarios && vao > Math.max(ant.alt, l.alt) * 1.7;
       // Recuo só indica parágrafo novo no texto corrido — citação é recuada
       // inteira e item de lista tem recuo pendurado, senão cada linha deles
       // viraria um bloco.
@@ -592,6 +729,30 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
       .map((l) => " ".repeat(Math.max(0, l.recuo - base)) + l.texto)
       .join("\n");
     return { tipo: "codigo", texto };
+  }
+
+  if (classe.tipo === "sumario") {
+    // Nível pelo recuo: no sumário impresso o capítulo encosta na margem e as
+    // seções vão entrando. O passo é ~1em, medido na própria linha.
+    const base = Math.min(...linhas.map((l) => l.x));
+    const entradas: EntradaSumario[] = [];
+    for (const l of linhas) {
+      const passo = Math.max(l.alt * 1.2, 1);
+      const nivel = Math.min(3, Math.max(1, 1 + Math.round((l.x - base) / passo))) as
+        | 1
+        | 2
+        | 3;
+      const achado = entradaDaLinha(l);
+      if (achado) {
+        entradas.push({ texto: achado.titulo, pagina: achado.pagina, nivel });
+        continue;
+      }
+      // Título que não coube numa linha só: emenda no de cima.
+      const ultima = entradas[entradas.length - 1];
+      if (ultima) ultima.texto += ` ${l.texto.trim()}`;
+      else entradas.push({ texto: l.texto.trim(), pagina: "", nivel });
+    }
+    return { tipo: "sumario", entradas };
   }
 
   if (classe.tipo === "tabela") {

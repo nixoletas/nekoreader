@@ -78,7 +78,10 @@ export function blocosDoCapitulo(
     (b) =>
       b.tipo === "imagem" ||
       b.tipo === "tabela" ||
-      (b.texto.trim().length > 0),
+      // O EPUB não produz bloco de sumário (lá o sumário é o `nav` do arquivo),
+      // mas o tipo é compartilhado com o PDF e precisa passar por aqui.
+      b.tipo === "sumario" ||
+      b.texto.trim().length > 0,
   );
 }
 
