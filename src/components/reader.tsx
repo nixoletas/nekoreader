@@ -74,6 +74,8 @@ const ConferirPagina = dynamic(() => import("./conferir-pagina"), { ssr: false }
 
 const ExportarLivro = dynamic(() => import("./exportar-livro"), { ssr: false });
 
+const EditarLivro = dynamic(() => import("./editar-livro"), { ssr: false });
+
 const EpubText = dynamic(() => import("./epub-text"), {
   ssr: false,
   loading: () => (
@@ -346,6 +348,9 @@ function ReaderCarregado({
   const [conferindo, setConferindo] = useState(false);
   /** Levar o livro pra fora do app (Markdown, EPUB). */
   const [exportando, setExportando] = useState(false);
+  /** Título e autor, editáveis daqui — o `book` da carga inicial não muda sozinho. */
+  const [nomes, setNomes] = useState({ title: book.title, author: book.author });
+  const [editando, setEditando] = useState(false);
   const [salvo, setSalvo] = useState(true);
   // preferências de leitura, lembradas entre livros
   // EPUB não tem folha pra desenhar — o texto remontado é a única leitura possível.
@@ -782,11 +787,14 @@ function ReaderCarregado({
             <ArrowLeft className="h-5 w-5" aria-hidden />
           </Link>
 
-          <h1
-            className="display mr-auto min-w-0 flex-1 truncate text-[15px] sm:text-base"
-            title={book.title}
-          >
-            {book.title}
+          <h1 className="display mr-auto min-w-0 flex-1 truncate text-[15px] sm:text-base">
+            <button
+              onClick={() => setEditando(true)}
+              title={`${nomes.title} — tocar pra editar título e autor`}
+              className="block w-full truncate text-left transition hover:text-accent"
+            >
+              {nomes.title}
+            </button>
           </h1>
 
           {!online ? (
@@ -1067,11 +1075,19 @@ function ReaderCarregado({
         </BarBtn>
       </nav>
 
+      {editando && (
+        <EditarLivro
+          book={book}
+          onSalvo={setNomes}
+          onFechar={() => setEditando(false)}
+        />
+      )}
+
       {exportando && fileUrl && !eEpub && (
         <ExportarLivro
           fileUrl={fileUrl}
-          titulo={book.title}
-          autor={book.author}
+          titulo={nomes.title}
+          autor={nomes.author}
           rotulos={rotulos}
           onFechar={() => setExportando(false)}
         />

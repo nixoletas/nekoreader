@@ -22,11 +22,25 @@ texto, marcador de página e memória de onde você parou.
 | Marcar página (★) e lista de páginas guardadas | painel |
 | Salva a última página lida sozinho (debounce 700ms) | automático |
 | Instalável no celular (PWA, standalone, ícone próprio) | manifest + SW |
+| Título e autor: editar à mão, ou descobrir pelo arquivo | estante e leitor |
 | Numeração do **livro** (ignora capa/rosto/sumário), inclusive romana | automático |
 | Conferir a folha original sem sair do texto remontado | leitor, modo Texto |
 | Exportar o livro em EPUB ou Markdown, com a página anotada | leitor |
 | OCR de página digitalizada, no próprio aparelho | leitor, modo Texto |
 | Equação destacada vira recorte da folha, em vez de texto embaralhado | modo Texto |
+
+### Como o livro se chama
+
+No envio, o nome sai dos metadados do PDF e, quando eles não prestam, do texto
+da capa — onde o título é literalmente o que está escrito maior. O filtro de
+lixo é a parte que importa: `Title` costuma vir como "Microsoft Word -
+cap1_FINAL2.doc" ou "untitled", e aceitar isso dá um nome errado que ninguém
+desconfia que está errado. Sem nada aproveitável, fica o nome do arquivo.
+
+Depois disso é tudo na mão: o lápis no card da estante (ou o título na barra do
+leitor) abre título e autor pra editar, com um botão de **descobrir pelo
+arquivo** que relê metadados, capa e — se a capa for uma imagem — passa OCR
+nela. O que a pessoa escreve sempre ganha do que o app deduz.
 
 ### Numeração do livro
 
@@ -142,6 +156,7 @@ src/
     pdf.ts                     worker do pdf.js, nº de páginas e capa
     pdf-blocos.ts              remontagem: linha → parágrafo, título, tabela, fórmula
     pdf-rotulos.ts             numeração impressa do livro (folio, romano, deslocamento)
+    pdf-titulo.ts              título e autor: metadados peneirados, capa, OCR
     pdf-ocr.ts                 página digitalizada → os mesmos Item do pdf.js
     exportar.ts                blocos → EPUB 3 (com page-list) e Markdown
     types.ts                   Book, Highlight, Bookmark, Rect, cores

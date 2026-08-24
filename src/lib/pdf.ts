@@ -52,15 +52,29 @@ export function abrirDoc(
 }
 
 /**
- * Lê nº de páginas e gera capa JPEG da página 1.
+ * Lê nº de páginas, gera capa JPEG da página 1 e tenta descobrir como o livro se
+ * chama.
  *
- * Título e autor voltam nulos: o PDF quase nunca traz esses campos preenchidos,
- * e o envio cai no nome do arquivo. (O EPUB traz — daí a forma compartilhada.)
+ * O título sai dos metadados ou do texto da capa (`pdf-titulo.ts`); quando nem
+ * um nem outro dão nada aproveitável volta nulo, e o envio cai no nome do
+ * arquivo, como antes. Aqui não se usa OCR: o envio tem que ser rápido, e livro
+ * digitalizado ganha o botão de detectar depois, na estante.
  */
 export async function inspecionarPdf(file: File): Promise<Inspecao> {
   const data = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjs.getDocument({ data }).promise;
   const totalPages = doc.numPages;
+
+  let title: string | null = null;
+  let author: string | null = null;
+  try {
+    const { titulosDoPdf } = await import("@/lib/pdf-titulo");
+    const achado = await titulosDoPdf(doc);
+    title = achado.titulo;
+    author = achado.autor;
+  } catch {
+    // sem título deduzido o envio segue com o nome do arquivo
+  }
 
   let cover: Blob | null = null;
   try {
@@ -82,5 +96,5 @@ export async function inspecionarPdf(file: File): Promise<Inspecao> {
   }
 
   await doc.destroy();
-  return { totalPages, cover, title: null, author: null };
+  return { totalPages, cover, title, author };
 }
