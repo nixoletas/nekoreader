@@ -14,7 +14,8 @@ texto, marcador de página e memória de onde você parou.
 |---|---|
 | Criar conta (senha + confirmação) e entrar | `/login` |
 | Esqueci a senha → link por e-mail → nova senha | `/esqueci` → `/nova-senha` |
-| Estante com upload de PDF (arrastar ou tocar) | `/` |
+| Estante com upload de PDF/EPUB (arrastar ou tocar) | `/` |
+| Com a estante cheia, o envio some num "+" no canto (modal) | `/` |
 | Capa gerada da página 1 + barra de progresso | `/` |
 | "Continuar lendo" com a página exata | `/` |
 | Leitor com zoom, ← →, deslizar o dedo, ir pra página | `/livro/[id]` |

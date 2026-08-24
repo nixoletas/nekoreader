@@ -6,6 +6,8 @@ import { Check, Download, Highlighter, ImageUp, Loader2, Pencil, Trash2 } from "
 import { createClient } from "@/lib/supabase/client";
 import { formatarTamanho } from "@/lib/format";
 import { useOfflineBook } from "@/lib/use-offline-book";
+import { useRotulos } from "@/lib/use-rotulos";
+import { rotuloDaPagina } from "@/lib/pdf-rotulos";
 import { trocarCapa } from "@/lib/trocar-capa";
 import { useAlert, useConfirm } from "@/components/dialog-provider";
 import EditarLivro from "@/components/editar-livro";
@@ -33,6 +35,11 @@ export default function BookCard({
   const alertar = useAlert();
 
   const rotulo = book.format === "epub" ? "cap." : "pág.";
+  // A numeração impressa do livro, quando este aparelho já a descobriu (o leitor
+  // guarda). Sem isso o card diria "pág. 121" e o leitor "pág. 105" — o mesmo
+  // ponto do mesmo livro com dois números.
+  const rotulos = useRotulos(book.id, null, book.format);
+  const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
 
   const progresso =
     book.total_pages && book.total_pages > 1
@@ -153,7 +160,9 @@ export default function BookCard({
         <p className="mt-0.5 text-xs text-muted">
           {/* No EPUB o que avança é capítulo, não folha. */}
           {rotulo}
-          {book.total_pages ? ` ${book.last_page} / ${book.total_pages}` : ` ${book.last_page}`}
+          {book.total_pages
+            ? ` ${numero(book.last_page)} / ${numero(book.total_pages)}`
+            : ` ${numero(book.last_page)}`}
           {book.size_bytes ? ` · ${formatarTamanho(book.size_bytes)}` : ""}
         </p>
       </Link>

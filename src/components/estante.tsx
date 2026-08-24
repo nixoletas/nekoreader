@@ -4,10 +4,17 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Clock, MonitorSmartphone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import BotaoTema from "@/components/botao-tema";
 import { limparTudoOffline, obterSnapshotEstante, salvarSnapshotEstante } from "@/lib/offline-db";
 import { useOnline } from "@/lib/use-offline";
+import { useRotulos } from "@/lib/use-rotulos";
+import { rotuloDaPagina } from "@/lib/pdf-rotulos";
+import { haQuantoTempo } from "@/lib/format";
+import { idDoDispositivo } from "@/lib/dispositivo";
+import PreviaPagina from "@/components/previa-pagina";
+import type { PosicaoDispositivo } from "@/lib/types";
 import BookCard from "@/components/book-card";
 import type { Book } from "@/lib/types";
 
@@ -20,6 +27,72 @@ const Uploader = dynamic(() => import("@/components/uploader"), {
   ),
 });
 
+// Mesmo motivo (ele carrega o Uploader por dentro), e é o caminho de todo dia:
+// quem já tem estante quase nunca abre isto.
+const AdicionarLivro = dynamic(() => import("@/components/adicionar-livro"), {
+  ssr: false,
+  loading: () => <span className="block h-9 w-9" />,
+});
+
+/**
+ * "página 105 de 431" — na numeração que o livro imprime, não na do arquivo.
+ *
+ * Componente próprio porque é um hook por livro, e o cartão de continuar lendo
+ * pode não existir. Lê só o que o leitor já descobriu e guardou neste aparelho;
+ * livro ainda não aberto aqui mostra a página do arquivo, como antes.
+ */
+function PosicaoDoLivro({ book }: { book: Book }) {
+  const rotulos = useRotulos(book.id, null, book.format);
+  const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
+
+  return (
+    <>
+      {book.format === "epub" ? "capítulo" : "página"} {numero(book.last_page)}
+      {book.total_pages ? ` de ${numero(book.total_pages)}` : ""}
+    </>
+  );
+}
+
+/**
+ * "há 2 horas · no Chrome no Windows" — quando e onde a leitura parou.
+ *
+ * O aparelho só é dito quando **não** é este: repetir "no Chrome no Windows" pra
+ * quem está olhando o Chrome no Windows não informa nada. Já a hora vale sempre,
+ * e é o que responde "de quando é esse ponto?" antes de abrir o livro.
+ *
+ * Sem linha em `reading_positions` (livro lido antes desta versão, ou banco sem
+ * a migração) sobra o horário do próprio livro — que é o que a estante já tinha.
+ */
+function OndeParou({
+  posicao,
+  quando,
+  aparelhoId,
+}: {
+  posicao: PosicaoDispositivo | null;
+  quando: string | null;
+  aparelhoId: string | null;
+}) {
+  const momento = posicao?.updated_at ?? quando;
+  if (!momento) return null;
+
+  const outroAparelho =
+    posicao && aparelhoId && posicao.device_id !== aparelhoId ? posicao.device_name : null;
+
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[13px] text-muted">
+      <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      {haQuantoTempo(momento)}
+      {outroAparelho && (
+        <>
+          <span aria-hidden>·</span>
+          <MonitorSmartphone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{outroAparelho}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 export default function Estante() {
   const router = useRouter();
   const [supabase] = useState(createClient);
@@ -29,6 +102,15 @@ export default function Estante() {
   const [books, setBooks] = useState<Book[] | null>(null);
   const [covers, setCovers] = useState<Map<string, string>>(new Map());
   const [contagem, setContagem] = useState<Map<string, number>>(new Map());
+  /** Onde cada livro parou, no aparelho que leu por último. */
+  const [posicoes, setPosicoes] = useState<Map<string, PosicaoDispositivo>>(new Map());
+  /**
+   * Este aparelho — pra calar o nome dele em vez de repeti-lo pra quem já está
+   * olhando ele. Ler o localStorage direto no estado é seguro aqui: o cartão que
+   * usa isso só existe depois que a estante carrega, ou seja, nunca na primeira
+   * renderização (que é a que o servidor também faz).
+   */
+  const [aparelhoId] = useState(() => idDoDispositivo());
   const [deDados, setDeDados] = useState(false); // true = mostrando retrato salvo (offline)
   const [erro, setErro] = useState<string | null>(null);
 
@@ -67,6 +149,20 @@ export default function Estante() {
       } else {
         setCovers(new Map());
       }
+
+      // Tabela nova: em banco que ainda não rodou a migração isto volta com erro,
+      // e o cartão segue sem o "onde e quando você parou".
+      const { data: pos } = await supabase
+        .from("reading_positions")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      const mapaPosicoes = new Map<string, PosicaoDispositivo>();
+      (pos as PosicaoDispositivo[] | null)?.forEach((p) => {
+        // A lista vem da mais recente pra mais antiga: a primeira de cada livro
+        // é o aparelho que leu por último.
+        if (!mapaPosicoes.has(p.book_id)) mapaPosicoes.set(p.book_id, p);
+      });
+      setPosicoes(mapaPosicoes);
 
       const { data: hl } = await supabase.from("highlights").select("book_id");
       const mapaContagem = new Map<string, number>();
@@ -180,17 +276,14 @@ export default function Estante() {
               href={`/livro/${emLeitura.id}`}
               className="sobe mb-8 flex items-stretch gap-4 overflow-hidden rounded-3xl border border-border bg-surface p-3 shadow-[var(--shadow)] transition active:scale-[0.99] sm:p-4"
             >
-              <div className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg rounded-l-sm bg-background shadow-md sm:h-32 sm:w-24">
+              {/* A prévia é da **página onde parou**, não a capa: é ela que faz
+                  reconhecer o ponto da leitura antes de abrir o livro. */}
+              <div className="relative h-32 w-24 shrink-0 overflow-hidden rounded-lg rounded-l-sm bg-background shadow-md sm:h-40 sm:w-[7.5rem]">
                 <div
                   aria-hidden
                   className="absolute inset-y-0 left-0 z-10 w-[5px] bg-gradient-to-r from-black/25 to-transparent"
                 />
-                {capaEmLeitura ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={capaEmLeitura} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full bg-[linear-gradient(160deg,var(--accent),var(--gold))]" />
-                )}
+                <PreviaPagina book={emLeitura} capaUrl={capaEmLeitura} />
               </div>
 
               <div className="flex min-w-0 flex-1 flex-col justify-center">
@@ -201,9 +294,24 @@ export default function Estante() {
                   {emLeitura.title}
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  página {emLeitura.last_page}
-                  {emLeitura.total_pages ? ` de ${emLeitura.total_pages}` : ""}
+                  <PosicaoDoLivro book={emLeitura} />
+                  {!!emLeitura.total_pages && (
+                    <span className="tabular-nums">
+                      {" · "}
+                      {Math.min(
+                        100,
+                        Math.round((emLeitura.last_page / emLeitura.total_pages) * 100),
+                      )}
+                      %
+                    </span>
+                  )}
                 </p>
+
+                <OndeParou
+                  posicao={posicoes.get(emLeitura.id) ?? null}
+                  quando={emLeitura.last_read_at}
+                  aparelhoId={aparelhoId}
+                />
 
                 {!!emLeitura.total_pages && (
                   <div className="mt-2.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-background">
@@ -228,8 +336,11 @@ export default function Estante() {
             </Link>
           )}
 
-          {/* ---------- upload ---------- */}
-          {online && (
+          {/* ---------- upload ----------
+              Só com a estante vazia a caixa grande aparece: ali subir um livro é
+              a única coisa que existe pra fazer. Com livros na estante ela vira o
+              "+" discreto lá embaixo, ao lado do título. */}
+          {online && books.length === 0 && (
             <div className="mb-8">
               <Uploader onUploaded={carregar} />
             </div>
@@ -246,9 +357,16 @@ export default function Estante() {
             </div>
           ) : (
             <>
-              <h2 className="mb-4 flex items-baseline gap-2">
+              <h2 className="mb-4 flex items-center gap-2">
                 <span className="display text-lg">Estante</span>
-                <span className="text-sm text-muted">{books.length} livros</span>
+                <span className="text-sm text-muted">
+                  {books.length} {books.length === 1 ? "livro" : "livros"}
+                </span>
+                {online && (
+                  <span className="ml-auto">
+                    <AdicionarLivro onEnviado={carregar} />
+                  </span>
+                )}
               </h2>
               <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {books.map((b) => (

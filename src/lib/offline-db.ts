@@ -13,7 +13,7 @@ import type { Bloco } from "@/lib/pdf-blocos";
  */
 
 const DB_NOME = "marginalia-offline";
-const DB_VERSAO = 5;
+const DB_VERSAO = 6;
 const LOJA_PDFS = "pdfs";
 const LOJA_FILA = "fila";
 const LOJA_LIVROS = "livros";
@@ -21,6 +21,7 @@ const LOJA_ESTANTE = "estante";
 const LOJA_SUMARIOS = "sumarios";
 const LOJA_ROTULOS = "rotulos";
 const LOJA_OCR = "ocr";
+const LOJA_PREVIAS = "previas";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -50,6 +51,9 @@ function abrirDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(LOJA_OCR)) {
         db.createObjectStore(LOJA_OCR, { keyPath: "chave" });
+      }
+      if (!db.objectStoreNames.contains(LOJA_PREVIAS)) {
+        db.createObjectStore(LOJA_PREVIAS, { keyPath: "bookId" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -224,6 +228,39 @@ export async function obterRotulos(
     >,
   );
   return dado?.versao === VERSAO_ROTULOS ? dado.rotulos : undefined;
+}
+
+/* ================================== Prévia da página onde a leitura parou */
+
+/**
+ * Um recorte da página em que a pessoa parou, pra estante mostrar de onde ela
+ * vai continuar.
+ *
+ * Guardado porque desenhar custa abrir o PDF: sem isto, toda visita à estante
+ * baixaria pedaço do arquivo e redesenharia a mesma página. Uma por livro — a
+ * prévia da posição anterior não interessa mais assim que a leitura anda.
+ */
+export type PreviaGuardada = {
+  bookId: string;
+  /** Página do arquivo que está desenhada — se a leitura andou, é preciso redesenhar. */
+  pagina: number;
+  /** JPEG em data URL: cabe no IndexedDB e desenha na hora, sem object URL pra revogar. */
+  imagem: string;
+  criadoEm: number;
+};
+
+export async function salvarPrevia(dado: PreviaGuardada): Promise<void> {
+  const db = await abrirDb();
+  await pedido(db.transaction(LOJA_PREVIAS, "readwrite").objectStore(LOJA_PREVIAS).put(dado));
+}
+
+export async function obterPrevia(bookId: string): Promise<PreviaGuardada | undefined> {
+  const db = await abrirDb();
+  return pedido(
+    db.transaction(LOJA_PREVIAS, "readonly").objectStore(LOJA_PREVIAS).get(bookId) as IDBRequest<
+      PreviaGuardada | undefined
+    >,
+  );
 }
 
 /* ========================================= Texto lido por OCR (página) */
