@@ -33,6 +33,8 @@ const ESPERA_SELECAO = 180;
 export function revogarBlocos(blocos: Bloco[]) {
   blocos.forEach((b) => {
     if (b.tipo === "imagem") URL.revokeObjectURL(b.url);
+    // A fórmula também é um recorte da folha, e também precisa ser devolvida.
+    if (b.tipo === "formula" && b.url) URL.revokeObjectURL(b.url);
   });
 }
 
@@ -54,6 +56,8 @@ export default function LeitorTexto({
   onDeleteHighlight,
   onSwipe,
   onModoPagina,
+  onOcr,
+  lendoImagem,
   textoSemConteudo,
 }: {
   /** Identifica o que está na tela (arquivo + página): mudou, o popover fecha. */
@@ -74,6 +78,10 @@ export default function LeitorTexto({
   onSwipe: (dir: 1 | -1) => void;
   /** Só o PDF tem modo Página pra oferecer como saída. */
   onModoPagina?: () => void;
+  /** Reconhecer o texto da página digitalizada (OCR). Só o PDF tem. */
+  onOcr?: () => void;
+  /** O reconhecimento está rodando — é lento o bastante pra precisar dizer. */
+  lendoImagem?: boolean;
   textoSemConteudo: string;
 }) {
   const [pending, setPending] = useState<Pending | null>(null);
@@ -225,14 +233,29 @@ export default function LeitorTexto({
     );
   }
 
-  if (!blocos.length) {
+  if (!blocos.length || !blocos.some((b) => b.tipo !== "imagem")) {
     return (
       <div className="mx-auto max-w-sm px-4 py-20 text-center">
         <p className="text-sm leading-relaxed text-muted">{textoSemConteudo}</p>
-        {onModoPagina && (
-          <Botao variante="contorno" onClick={onModoPagina} className="mt-5">
-            Ver como página
-          </Botao>
+
+        <div className="mt-5 flex flex-col items-stretch gap-2">
+          {onOcr && (
+            <Botao onClick={onOcr} disabled={lendoImagem}>
+              {lendoImagem ? "Lendo a página…" : "Reconhecer o texto (OCR)"}
+            </Botao>
+          )}
+          {onModoPagina && (
+            <Botao variante="contorno" onClick={onModoPagina}>
+              Ver como página
+            </Botao>
+          )}
+        </div>
+
+        {lendoImagem && (
+          <p className="mt-4 text-xs leading-relaxed text-muted">
+            Na primeira vez o dicionário do idioma é baixado; depois disso o
+            reconhecimento roda inteiro neste aparelho.
+          </p>
         )}
       </div>
     );
@@ -258,6 +281,28 @@ export default function LeitorTexto({
               alt=""
               className="mx-auto my-5 block h-auto max-w-full rounded-md shadow-[0_1px_2px_rgba(60,45,25,0.08),0_10px_24px_-16px_rgba(60,45,25,0.5)]"
             />
+          );
+        }
+        if (b.tipo === "formula") {
+          // O recorte da folha é a fórmula legível; o texto remontado vai como
+          // descrição, porque ele sai embaralhado do PDF (glifo solto, em fonte
+          // de matemática) e não quer dizer nada em prosa. Quando o recorte
+          // falha, é ele que sobra na tela — errado, mas presente.
+          return b.url ? (
+            <img
+              key={i}
+              src={b.url}
+              width={b.largura}
+              height={b.altura}
+              loading="lazy"
+              alt={b.texto}
+              title={b.texto}
+              className="formula mx-auto my-4 block h-auto max-w-full dark:contrast-[0.9] dark:invert"
+            />
+          ) : (
+            <p key={i} className="formula-texto my-4 text-center font-mono text-[0.9em] text-muted">
+              {b.texto}
+            </p>
           );
         }
         if (b.tipo === "sumario") {

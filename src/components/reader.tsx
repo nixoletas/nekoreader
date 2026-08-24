@@ -11,6 +11,8 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Eye,
   Highlighter,
   LayoutGrid,
   List,
@@ -34,6 +36,8 @@ import { usePreferencia } from "@/lib/prefs";
 import { idDoDispositivo, nomeDoDispositivo } from "@/lib/dispositivo";
 import { haQuantoTempo } from "@/lib/format";
 import { useSumario, type EstadoSumario } from "@/lib/use-sumario";
+import { useRotulos } from "@/lib/use-rotulos";
+import { numeracaoPropria, paginaDoRotulo, rotuloDaPagina, type Rotulos } from "@/lib/pdf-rotulos";
 import { Botao } from "@/components/ui";
 import { useConfirm, usePrompt } from "@/components/dialog-provider";
 import BotaoTema from "@/components/botao-tema";
@@ -65,6 +69,10 @@ const PdfText = dynamic(() => import("./pdf-text"), {
 });
 
 const VisaoPaginas = dynamic(() => import("./visao-paginas"), { ssr: false });
+
+const ConferirPagina = dynamic(() => import("./conferir-pagina"), { ssr: false });
+
+const ExportarLivro = dynamic(() => import("./exportar-livro"), { ssr: false });
 
 const EpubText = dynamic(() => import("./epub-text"), {
   ssr: false,
@@ -318,6 +326,15 @@ function ReaderCarregado({
       : // Este aparelho primeiro: `last_page` é do livro e pode ser de outro.
         Math.max(1, paginaLocal(book.id) ?? book.last_page ?? 1),
   );
+  // A numeração impressa do livro — a que ignora capa, rosto e sumário e começa
+  // o "1" lá pela página 17 do arquivo. Chega depois da primeira renderização
+  // (é uma varredura); até lá `rotulo` devolve a página física, como antes.
+  const rotulos = useRotulos(book.id, fileUrl, book.format);
+  const rotulo = useCallback(
+    (p: number) => rotuloDaPagina(rotulos, p) ?? String(p),
+    [rotulos],
+  );
+
   const [zoom, setZoom] = useState(1);
   const [highlights, setHighlights] = useState<Highlight[]>(initialHighlights);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
@@ -325,10 +342,16 @@ function ReaderCarregado({
   const [sheet, setSheet] = useState<Sheet>(null);
   /** Grade com todas as páginas (tipo Kindle) por cima da leitura. */
   const [vendoPaginas, setVendoPaginas] = useState(false);
+  /** A folha original por cima do texto remontado, pra conferir a remontagem. */
+  const [conferindo, setConferindo] = useState(false);
+  /** Levar o livro pra fora do app (Markdown, EPUB). */
+  const [exportando, setExportando] = useState(false);
   const [salvo, setSalvo] = useState(true);
   // preferências de leitura, lembradas entre livros
   // EPUB não tem folha pra desenhar — o texto remontado é a única leitura possível.
   const eEpub = book.format === "epub";
+  /** O livro conta diferente do arquivo — é o que decide mostrar as duas contas. */
+  const temRotulos = !eEpub && numeracaoPropria(rotulos);
   const [modoEscolhido, mudarModo] = usePreferencia<Modo>(CHAVE_MODO, "pagina", (v) =>
     v === "texto" || v === "pagina" ? v : null,
   );
@@ -560,19 +583,23 @@ function ReaderCarregado({
 
     jaPerguntou.current = true;
     void (async () => {
-      const rotulo = eEpub ? "capítulo" : "página";
+      const nome = eEpub ? "capítulo" : "página";
       const artigo = eEpub ? "o" : "a";
+      // Os números da pergunta são os do livro: é assim que a pessoa sabe onde
+      // parou ("página 87"), não pela contagem do arquivo.
+      const la = rotulo(outra.page);
+      const aqui = rotulo(paginaRef.current);
       const sim = await confirmar({
         titulo: `Continuar de onde você parou no ${outra.device_name}?`,
-        mensagem: `Lá a leitura está n${artigo} ${rotulo} ${outra.page} (${haQuantoTempo(outra.updated_at)}). Aqui você está n${artigo} ${rotulo} ${paginaRef.current}.`,
-        textoConfirmar: `Ir para ${artigo} ${rotulo} ${outra.page}`,
+        mensagem: `Lá a leitura está n${artigo} ${nome} ${la} (${haQuantoTempo(outra.updated_at)}). Aqui você está n${artigo} ${nome} ${aqui}.`,
+        textoConfirmar: `Ir para ${artigo} ${nome} ${la}`,
         textoCancelar: "Ficar aqui",
       });
       if (!sim) return;
       posicoes.set(outra.page, Math.max(0, Math.min(1, outra.fraction ?? 0)));
       irPara(outra.page);
     })();
-  }, [posicoesRemotas, aparelho.id, veioDeLink, confirmar, posicoes, irPara, eEpub]);
+  }, [posicoesRemotas, aparelho.id, veioDeLink, confirmar, posicoes, irPara, eEpub, rotulo]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -719,6 +746,7 @@ function ReaderCarregado({
   // sabem a página, montar exige varrer o texto inteiro.
   const sumario = useSumario(book.id, fileUrl, book.format, aba === "sumario");
 
+
   const painel = (
     <Painel
       aba={aba}
@@ -728,6 +756,7 @@ function ReaderCarregado({
       sumario={sumario}
       pagina={page}
       rotuloPagina={eEpub ? "capítulo" : "página"}
+      numero={rotulo}
       onIr={(p) => {
         irPara(p);
         setSheet(null);
@@ -801,15 +830,19 @@ function ReaderCarregado({
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
               </IconBtn>
-              <input
-                type="number"
-                value={page}
-                min={1}
-                max={numPages || undefined}
-                onChange={(e) => irPara(Number(e.target.value) || 1)}
+              <CampoPagina
+                page={page}
+                numPages={numPages}
+                rotulos={rotulos}
+                onIr={irPara}
                 className="w-14 bg-transparent text-center text-sm outline-none"
               />
-              <span className="pr-2 text-sm text-muted">/ {numPages || "?"}</span>
+              <span
+                className="pr-2 text-sm text-muted"
+                title={temRotulos ? `Página ${page} do arquivo, de ${numPages}` : undefined}
+              >
+                / {temRotulos ? rotulo(numPages) : numPages || "?"}
+              </span>
               <IconBtn
                 onClick={() => irPara(page + 1)}
                 disabled={!!numPages && page >= numPages}
@@ -827,6 +860,21 @@ function ReaderCarregado({
             </IconBtn>
 
             <BotaoTema />
+
+            {!eEpub && modo === "texto" && (
+              <IconBtn
+                onClick={() => setConferindo(true)}
+                label="Conferir no original"
+              >
+                <Eye className="h-4 w-4" aria-hidden />
+              </IconBtn>
+            )}
+
+            {!eEpub && (
+              <IconBtn onClick={() => setExportando(true)} label="Exportar o livro">
+                <Download className="h-4 w-4" aria-hidden />
+              </IconBtn>
+            )}
 
             {!eEpub && <Segmento modo={modo} onModo={mudarModo} />}
 
@@ -944,6 +992,7 @@ function ReaderCarregado({
               ) : (
                 <PdfText
                   fileUrl={fileUrl}
+                  bookId={book.id}
                   pageNumber={page}
                   escala={fonte}
                   highlights={marcacoesTexto}
@@ -993,10 +1042,10 @@ function ReaderCarregado({
           onClick={() => setSheet("ir")}
           className="tap min-w-[5.5rem] flex-col rounded-xl px-3 !gap-0"
         >
-          <span className="text-[15px] font-semibold leading-tight">{page}</span>
+          <span className="text-[15px] font-semibold leading-tight">{rotulo(page)}</span>
           <span className="text-[10px] leading-tight text-muted">
             {eEpub ? "cap. de " : "de "}
-            {numPages || "?"}
+            {temRotulos ? rotulo(numPages) : numPages || "?"}
           </span>
         </button>
 
@@ -1018,11 +1067,31 @@ function ReaderCarregado({
         </BarBtn>
       </nav>
 
+      {exportando && fileUrl && !eEpub && (
+        <ExportarLivro
+          fileUrl={fileUrl}
+          titulo={book.title}
+          autor={book.author}
+          rotulos={rotulos}
+          onFechar={() => setExportando(false)}
+        />
+      )}
+
+      {conferindo && fileUrl && !eEpub && (
+        <ConferirPagina
+          fileUrl={fileUrl}
+          pagina={page}
+          numero={rotulo(page)}
+          onFechar={() => setConferindo(false)}
+        />
+      )}
+
       {vendoPaginas && (
         <VisaoPaginas
           fileUrl={fileUrl}
           numPages={numPages}
           pagina={page}
+          rotulos={rotulos}
           eEpub={eEpub}
           onIr={(p) => {
             irPara(p);
@@ -1055,20 +1124,20 @@ function ReaderCarregado({
                     {eEpub ? "Ir para o capítulo" : "Ir para a página"}
                   </p>
                   <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      defaultValue={page}
-                      min={1}
-                      max={numPages || undefined}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (v >= 1) irPara(v);
-                      }}
+                    <CampoPagina
+                      page={page}
+                      numPages={numPages}
+                      rotulos={rotulos}
+                      onIr={irPara}
                       className="h-12 w-28 rounded-xl border border-border bg-background px-4 text-center text-base outline-none focus:border-accent"
                     />
                     <span className="text-sm text-muted">
-                      de {numPages || "?"}
+                      de {temRotulos ? rotulo(numPages) : numPages || "?"}
+                      {temRotulos && (
+                        <span className="block text-[11px]">
+                          numeração do livro · arquivo {page}/{numPages}
+                        </span>
+                      )}
                     </span>
                     <Botao
                       variante="contorno"
@@ -1117,6 +1186,30 @@ function ReaderCarregado({
                       onModo={mudarModo}
                       className="w-full [&_button]:!min-h-12"
                     />
+                    {modo === "texto" && (
+                      <Botao
+                        variante="contorno"
+                        onClick={() => {
+                          setConferindo(true);
+                          setSheet(null);
+                        }}
+                        className="mt-2 w-full"
+                      >
+                        <Eye className="h-4 w-4" aria-hidden />
+                        Conferir no original
+                      </Botao>
+                    )}
+                    <Botao
+                      variante="contorno"
+                      onClick={() => {
+                        setExportando(true);
+                        setSheet(null);
+                      }}
+                      className="mt-2 w-full"
+                    >
+                      <Download className="h-4 w-4" aria-hidden />
+                      Exportar o livro
+                    </Botao>
                   </div>
                 )}
 
@@ -1205,6 +1298,7 @@ function Painel({
   sumario,
   pagina,
   rotuloPagina,
+  numero,
   onIr,
   onDelHighlight,
   onRenomear,
@@ -1220,6 +1314,8 @@ function Painel({
   pagina: number;
   /** "página" no PDF, "capítulo" no EPUB — o número é o mesmo, o nome não. */
   rotuloPagina: string;
+  /** Página do arquivo → número como o livro imprime ("17" → "3", "5" → "v"). */
+  numero: (p: number) => string;
   onIr: (p: number) => void;
   onDelHighlight: (id: string) => void;
   onRenomear: (id: string) => void;
@@ -1253,7 +1349,7 @@ function Painel({
 
       <div className="safe-b flex-1 overflow-y-auto">
         {aba === "sumario" ? (
-          <Sumario estado={sumario} pagina={pagina} onIr={onIr} />
+          <Sumario estado={sumario} pagina={pagina} numero={numero} onIr={onIr} />
         ) : aba === "marcacoes" ? (
           highlights.length === 0 ? (
             <Vazio>
@@ -1281,7 +1377,7 @@ function Painel({
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="text-[11px] uppercase tracking-wider text-muted">
-                      {rotuloPagina} {h.page}
+                      {rotuloPagina} {numero(h.page)}
                     </span>
                     {h.title && (
                       <p className="display mt-0.5 text-[13px] leading-snug">
@@ -1348,7 +1444,7 @@ function Painel({
                     aria-hidden
                     fill="currentColor"
                   />
-                  {rotuloPagina === "capítulo" ? "Capítulo" : "Página"} {b.page}
+                  {rotuloPagina === "capítulo" ? "Capítulo" : "Página"} {numero(b.page)}
                 </button>
                 <button
                   onClick={() => onDelBookmark(b.id)}
@@ -1376,10 +1472,13 @@ function Painel({
 function Sumario({
   estado,
   pagina,
+  numero,
   onIr,
 }: {
   estado: EstadoSumario;
   pagina: number;
+  /** Página do arquivo → número como o livro imprime. */
+  numero: (p: number) => string;
   onIr: (p: number) => void;
 }) {
   const { itens, progresso, carregando, erro } = estado;
@@ -1454,7 +1553,7 @@ function Sumario({
               }`}
               aria-hidden={semPagina}
             >
-              {item.pagina ?? "·"}
+              {item.pagina === null ? "·" : numero(item.pagina)}
             </span>
           </>
         );
@@ -1562,6 +1661,69 @@ function SeletorTema() {
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * O campo "ir para a página", falando a numeração do livro.
+ *
+ * Quem digita "87" quer a página 87 **do livro** — a que está impressa no pé da
+ * folha e é a que a citação, o índice e o colega de estudo usam. Só quando esse
+ * número não existe no livro (ou o livro não tem numeração própria) é que ele
+ * cai pra página do arquivo, que é a conta antiga.
+ *
+ * É campo de texto, e não `number`, porque a abertura do livro é numerada em
+ * romano: "xix" precisa poder ser digitado.
+ */
+function CampoPagina({
+  page,
+  numPages,
+  rotulos,
+  onIr,
+  className,
+}: {
+  page: number;
+  numPages: number;
+  rotulos: Rotulos | null;
+  onIr: (p: number) => void;
+  className?: string;
+}) {
+  const impresso = rotuloDaPagina(rotulos, page) ?? String(page);
+  // Enquanto a pessoa digita, o campo é dela; fora disso ele espelha a página
+  // aberta (que muda ao virar a folha, ao rolar, ao vir do sumário).
+  const [rascunho, setRascunho] = useState<string | null>(null);
+
+  function aplicar(texto: string) {
+    const doLivro = paginaDoRotulo(rotulos, texto);
+    if (doLivro) return onIr(doLivro);
+    const fisica = Number(texto);
+    if (Number.isFinite(fisica) && fisica >= 1) onIr(Math.min(fisica, numPages || fisica));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={rascunho ?? impresso}
+      onChange={(e) => {
+        setRascunho(e.target.value);
+        aplicar(e.target.value);
+      }}
+      onBlur={() => setRascunho(null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          aplicar((e.target as HTMLInputElement).value);
+          setRascunho(null);
+        }
+      }}
+      aria-label="Ir para a página"
+      title={
+        rotulos && impresso !== String(page)
+          ? `Página ${impresso} do livro · ${page} do arquivo`
+          : undefined
+      }
+      className={className}
+    />
   );
 }
 

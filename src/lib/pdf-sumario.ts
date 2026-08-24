@@ -1,5 +1,6 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { remontarColunas, type Item } from "@/lib/pdf-blocos";
+import { remontarColunas } from "@/lib/pdf-blocos";
+import { itensDaPagina } from "@/lib/pdf-itens";
 import {
   achatar,
   ajustar,
@@ -143,38 +144,14 @@ async function titulosDaPagina(
   doc: PDFDocumentProxy,
   pageNumber: number,
 ): Promise<TituloAchado[]> {
-  try {
-    const page = await doc.getPage(pageNumber);
-    const { width: pw } = page.getViewport({ scale: 1 });
-    const conteudo = await page.getTextContent();
+  // A extração é a leve de `pdf-itens` (não resolve itálico nem recorta imagem):
+  // título não depende de itálico, e é isso que torna varrer o livro inteiro viável.
+  const lido = await itensDaPagina(doc, pageNumber);
+  if (!lido) return []; // página estranha não derruba a varredura inteira
 
-    const itens: Item[] = [];
-    for (const it of conteudo.items) {
-      if (!("str" in it) || !it.str) continue;
-      const fonte = "fontName" in it ? String(it.fontName ?? "") : "";
-      itens.push({
-        texto: it.str,
-        x: it.transform[4],
-        y: it.transform[5],
-        w: it.width,
-        alt: Math.abs(it.transform[3]) || it.height || 10,
-        fonte,
-        mono: conteudo.styles?.[fonte]?.fontFamily === "monospace",
-        // A varredura não resolve as fontes de verdade (custaria a lista de
-        // operadores de cada página); título não depende de itálico.
-        italico: false,
-        espaco: !it.str.trim(),
-      });
-    }
-
-    // A limpeza do texto (ligadura etc.) fica pro `limparTitulo` — aqui interessa
-    // só saber quais linhas são título e em que página estão.
-    return remontarColunas(itens, pw)
-      .flat()
-      .map((p) => p.bloco)
-      .filter((b) => b.tipo === "titulo")
-      .map((b) => ({ texto: b.texto, nivel: b.nivel, pagina: pageNumber }));
-  } catch {
-    return []; // página estranha não derruba a varredura inteira
-  }
+  return remontarColunas(lido.itens, lido.pw)
+    .flat()
+    .map((p) => p.bloco)
+    .filter((b) => b.tipo === "titulo")
+    .map((b) => ({ texto: b.texto, nivel: b.nivel, pagina: pageNumber }));
 }

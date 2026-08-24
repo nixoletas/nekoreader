@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import { extrairImagens, type ImagemPagina } from "@/lib/pdf-images";
+import { extrairImagens, recortarCaixas, type ImagemPagina } from "@/lib/pdf-images";
 import {
   remontarColunas,
   saneiaLigaduras,
@@ -30,7 +30,7 @@ export async function extrairBlocos(
     extrairImagens(page),
   ]);
 
-  const italicas = fontesItalicas(page, conteudo.styles);
+  const { italicas, matematicas } = classificarFontes(page, conteudo.styles);
 
   const itens: Item[] = [];
   for (const it of conteudo.items) {
@@ -47,6 +47,9 @@ export async function extrairBlocos(
       // que separa bloco de código de texto comum.
       mono: conteudo.styles?.[fonte]?.fontFamily === "monospace",
       italico: italicas.has(fonte),
+      // Fonte de matemática é o que denuncia fórmula: o gerador do PDF só troca
+      // de fonte ali porque ali é equação.
+      matematica: matematicas.has(fonte),
       espaco: !it.str.trim(),
     });
   }
@@ -70,6 +73,8 @@ export async function extrairBlocos(
     .flatMap((col, i) => mesclarImagens(col, gruposImagem[i] ?? []))
     .map((p) => p.bloco);
 
+  await recortarFormulas(page, blocos);
+
   // Número de página solto no meio do caminho não vira parágrafo.
   return blocos.length > 2
     ? blocos.filter(
@@ -83,30 +88,68 @@ export async function extrairBlocos(
 }
 
 /**
- * Quais ids de fonte da página são itálicos.
+ * A equação destacada vira um recorte da própria folha.
+ *
+ * O texto dela já foi remontado (e sai embaralhado — o PDF guarda glifo solto,
+ * não fórmula); aqui ele ganha a imagem que vai ser mostrada no lugar. Uma
+ * renderização da página serve todas as fórmulas dela.
+ */
+async function recortarFormulas(page: PDFPageProxy, blocos: Bloco[]): Promise<void> {
+  const formulas = blocos.filter((b) => b.tipo === "formula");
+  if (!formulas.length) return;
+
+  try {
+    const recortes = await recortarCaixas(
+      page,
+      formulas.map((f) => f.caixa),
+    );
+    formulas.forEach((f, i) => {
+      const r = recortes[i];
+      if (!r) return; // sem recorte, sobra o texto — que é o que já estava lá
+      f.url = r.url;
+      f.largura = r.largura;
+      f.altura = r.altura;
+    });
+  } catch {
+    // Falhou o desenho: a fórmula continua aparecendo como texto.
+  }
+}
+
+/**
+ * Quais ids de fonte da página são itálicos, e quais são de matemática.
  *
  * O `styles` do pdf.js só diz a família genérica (serif/sans/monospace); quem
  * sabe do itálico é o nome real da fonte incorporada ("MinionPro-It",
  * "Garamond-Italic", "Helvetica-Oblique"), que fica no `commonObjs`. Ele só está
  * resolvido depois da lista de operadores — por isso a checagem com `has`, que
- * devolve "nenhuma itálica" em vez de estourar se algo mudar nessa ordem.
+ * devolve "nenhuma" em vez de estourar se algo mudar nessa ordem.
+ *
+ * As de matemática são as famílias que os geradores usam só pra fórmula: as
+ * Computer Modern de matemática do TeX (CMMI, CMSY, CMEX), as da AMS (MSAM,
+ * MSBM), Symbol e as que trazem "math" no nome.
  */
-function fontesItalicas(
+function classificarFontes(
   page: PDFPageProxy,
   styles: Record<string, { fontFamily?: string }> | undefined,
-): Set<string> {
+): { italicas: Set<string>; matematicas: Set<string> } {
   const italicas = new Set<string>();
+  const matematicas = new Set<string>();
+
   for (const id of Object.keys(styles ?? {})) {
     try {
       if (!page.commonObjs.has(id)) continue;
       const fonte = page.commonObjs.get(id) as { name?: string } | null;
       const nome = fonte?.name ?? "";
       if (/italic|oblique|[-_]it($|[^a-z])/i.test(nome)) italicas.add(id);
+      if (/cmmi|cmsy|cmex|msam|msbm|mtmi|mtsy|math|symbol|euclid/i.test(nome)) {
+        matematicas.add(id);
+      }
     } catch {
       // fonte não resolvida: segue sem itálico, que é melhor que não abrir a página
     }
   }
-  return italicas;
+
+  return { italicas, matematicas };
 }
 
 function imagemParaBloco(im: ImagemPagina): Bloco {

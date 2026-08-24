@@ -38,6 +38,9 @@ yarn-error.log*
 /public/pdf.worker.min.mjs
 /public/pdfjs/
 
+# worker e núcleo WASM do tesseract (OCR), copiados no mesmo prebuild
+/public/tesseract/
+
 # vercel
 .vercel
 

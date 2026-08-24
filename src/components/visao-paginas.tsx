@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { abrirDoc } from "@/lib/pdf";
+import { paginaDoRotulo, rotuloDaPagina, type Rotulos } from "@/lib/pdf-rotulos";
 import { Botao } from "@/components/ui";
 
 /** Largura do recorte de cada página, em pixel. Pequeno de propósito: são centenas. */
@@ -22,6 +23,7 @@ export default function VisaoPaginas({
   fileUrl,
   numPages,
   pagina,
+  rotulos,
   eEpub,
   onIr,
   onFechar,
@@ -29,12 +31,16 @@ export default function VisaoPaginas({
   fileUrl: string | null;
   numPages: number;
   pagina: number;
+  /** A numeração impressa do livro; `null` quando ela é a mesma do arquivo. */
+  rotulos: Rotulos | null;
   /** No EPUB não existe folha pra desenhar — a grade vira uma lista de capítulos. */
   eEpub: boolean;
   onIr: (p: number) => void;
   onFechar: () => void;
 }) {
   const paginas = Array.from({ length: Math.max(0, numPages) }, (_, i) => i + 1);
+  // A grade mostra o número do livro; a posição na lista continua sendo a do arquivo.
+  const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
 
   // Fecha no Esc, e trava a rolagem do texto atrás enquanto a grade está aberta.
   useEffect(() => {
@@ -61,19 +67,22 @@ export default function VisaoPaginas({
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
         <p className="display text-base">{eEpub ? "Capítulos" : "Páginas"}</p>
         <span className="text-xs text-muted">
-          {pagina} de {numPages || "?"}
+          {numero(pagina)} de {numero(numPages)}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <input
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={1}
-            max={numPages || undefined}
             placeholder="ir para"
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
-              const v = Number((e.target as HTMLInputElement).value);
-              if (v >= 1) onIr(v);
+              // O que a pessoa digita é o número do livro; a página do arquivo é
+              // o que sobra quando esse número não existe (livro sem numeração).
+              const texto = (e.target as HTMLInputElement).value;
+              const doLivro = paginaDoRotulo(rotulos, texto);
+              if (doLivro) return onIr(doLivro);
+              const v = Number(texto);
+              if (v >= 1) onIr(Math.min(v, numPages || v));
             }}
             className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm outline-none focus:border-accent"
             aria-label={eEpub ? "Ir para o capítulo" : "Ir para a página"}
@@ -103,7 +112,7 @@ export default function VisaoPaginas({
               >
                 {eEpub || !fileUrl ? (
                   <span className="display flex aspect-[1/1.4] items-center justify-center rounded bg-surface text-2xl text-muted">
-                    {p}
+                    {numero(p)}
                   </span>
                 ) : (
                   <Miniatura fileUrl={fileUrl} pagina={p} />
@@ -113,7 +122,7 @@ export default function VisaoPaginas({
                     p === pagina ? "font-semibold text-accent" : "text-muted"
                   }`}
                 >
-                  {p}
+                  {numero(p)}
                 </span>
               </button>
             </li>

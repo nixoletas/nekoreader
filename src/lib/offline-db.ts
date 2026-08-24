@@ -2,6 +2,8 @@
 
 import type { Book, Bookmark, Highlight } from "@/lib/types";
 import type { ItemSumario } from "@/lib/sumario";
+import type { Rotulos } from "@/lib/pdf-rotulos";
+import type { Bloco } from "@/lib/pdf-blocos";
 
 /**
  * Armazenamento local (IndexedDB) pra leitura offline: o PDF baixado de cada
@@ -11,12 +13,14 @@ import type { ItemSumario } from "@/lib/sumario";
  */
 
 const DB_NOME = "marginalia-offline";
-const DB_VERSAO = 3;
+const DB_VERSAO = 5;
 const LOJA_PDFS = "pdfs";
 const LOJA_FILA = "fila";
 const LOJA_LIVROS = "livros";
 const LOJA_ESTANTE = "estante";
 const LOJA_SUMARIOS = "sumarios";
+const LOJA_ROTULOS = "rotulos";
+const LOJA_OCR = "ocr";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -40,6 +44,12 @@ function abrirDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(LOJA_SUMARIOS)) {
         db.createObjectStore(LOJA_SUMARIOS, { keyPath: "bookId" });
+      }
+      if (!db.objectStoreNames.contains(LOJA_ROTULOS)) {
+        db.createObjectStore(LOJA_ROTULOS, { keyPath: "bookId" });
+      }
+      if (!db.objectStoreNames.contains(LOJA_OCR)) {
+        db.createObjectStore(LOJA_OCR, { keyPath: "chave" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -168,6 +178,101 @@ export async function obterSumario(bookId: string): Promise<ItemSumario[] | unde
     >,
   );
   return dado?.versao === VERSAO_SUMARIO ? dado.itens : undefined;
+}
+
+/* ================================================ Numeração do livro */
+
+/**
+ * A numeração impressa, guardada por livro.
+ *
+ * Descobrir ela custa uma varredura de dezenas de páginas; o resultado não muda
+ * (o arquivo é o mesmo), então vale pra sempre. `versao` invalida tudo de uma
+ * vez quando a dedução melhorar. `nenhuma` é resposta legítima e guardada
+ * também: sem isso, livro sem numeração própria varreria de novo toda abertura.
+ */
+export type RotulosGuardados = {
+  bookId: string;
+  versao: number;
+  rotulos: Rotulos | null;
+  atualizadoEm: number;
+};
+
+export const VERSAO_ROTULOS = 1;
+
+export async function salvarRotulos(bookId: string, rotulos: Rotulos | null): Promise<void> {
+  const db = await abrirDb();
+  const dado: RotulosGuardados = {
+    bookId,
+    versao: VERSAO_ROTULOS,
+    rotulos,
+    atualizadoEm: Date.now(),
+  };
+  await pedido(db.transaction(LOJA_ROTULOS, "readwrite").objectStore(LOJA_ROTULOS).put(dado));
+}
+
+/**
+ * `undefined` = nunca foi calculado (vale varrer); `null` = já foi, e este livro
+ * não tem numeração própria.
+ */
+export async function obterRotulos(
+  bookId: string,
+): Promise<Rotulos | null | undefined> {
+  const db = await abrirDb();
+  const dado = await pedido(
+    db.transaction(LOJA_ROTULOS, "readonly").objectStore(LOJA_ROTULOS).get(bookId) as IDBRequest<
+      RotulosGuardados | undefined
+    >,
+  );
+  return dado?.versao === VERSAO_ROTULOS ? dado.rotulos : undefined;
+}
+
+/* ========================================= Texto lido por OCR (página) */
+
+/**
+ * O texto reconhecido de uma página digitalizada.
+ *
+ * Reconhecer custa segundos de processador por página; sem guardar, folhear pra
+ * trás pagaria tudo de novo. É por página (e não por livro) porque o OCR é sob
+ * demanda: a pessoa lê as páginas que quer, na ordem que quiser.
+ */
+export type OcrGuardado = {
+  /** `bookId#pagina` — a página é do arquivo. */
+  chave: string;
+  versao: number;
+  blocos: Bloco[];
+  criadoEm: number;
+};
+
+export const VERSAO_OCR = 1;
+
+const chaveOcr = (bookId: string, pagina: number) => `${bookId}#${pagina}`;
+
+export async function salvarOcr(
+  bookId: string,
+  pagina: number,
+  blocos: Bloco[],
+): Promise<void> {
+  const db = await abrirDb();
+  const dado: OcrGuardado = {
+    chave: chaveOcr(bookId, pagina),
+    versao: VERSAO_OCR,
+    blocos,
+    criadoEm: Date.now(),
+  };
+  await pedido(db.transaction(LOJA_OCR, "readwrite").objectStore(LOJA_OCR).put(dado));
+}
+
+export async function obterOcr(
+  bookId: string,
+  pagina: number,
+): Promise<Bloco[] | undefined> {
+  const db = await abrirDb();
+  const dado = await pedido(
+    db.transaction(LOJA_OCR, "readonly").objectStore(LOJA_OCR).get(chaveOcr(bookId, pagina)) as IDBRequest<
+      OcrGuardado | undefined
+    >,
+  );
+  return dado?.versao === VERSAO_OCR ? dado.blocos : undefined;
 }
 
 /* ============================================== Fila de sincronização */

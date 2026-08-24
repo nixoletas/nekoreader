@@ -7,6 +7,8 @@ import { ArrowLeft, Highlighter, Pencil, StickyNote, Trash2 } from "lucide-react
 import { createClient } from "@/lib/supabase/client";
 import { obterSnapshotLivro } from "@/lib/offline-db";
 import { executarOuEnfileirar, mesclarFilaLocal } from "@/lib/offline-sync";
+import { useRotulos } from "@/lib/use-rotulos";
+import { rotuloDaPagina } from "@/lib/pdf-rotulos";
 import { usePrompt } from "@/components/dialog-provider";
 import BotaoTema from "@/components/botao-tema";
 import {
@@ -31,6 +33,10 @@ export default function MarcacoesBlog() {
   const [book, setBook] = useState<Book | null>(null);
   const [highlights, setHighlights] = useState<Highlight[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Aqui a numeração impressa só é lida do que o leitor já descobriu (esta tela
+  // nunca abre o arquivo): citar "página 87" tem que dar o mesmo número dos dois lados.
+  const rotulos = useRotulos(bookId, null, book?.format ?? "pdf");
 
   const carregar = useCallback(async () => {
     const {
@@ -213,7 +219,8 @@ export default function MarcacoesBlog() {
                     href={`/livro/${bookId}?p=${h.page}`}
                     className="text-[11px] uppercase tracking-[0.14em] text-muted transition hover:text-accent"
                   >
-                    {book?.format === "epub" ? "capítulo" : "página"} {h.page}
+                    {book?.format === "epub" ? "capítulo" : "página"}{" "}
+                    {rotuloDaPagina(rotulos, h.page) ?? h.page}
                   </Link>
                   <span className="ml-auto flex opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                     <button

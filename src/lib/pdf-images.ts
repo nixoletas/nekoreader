@@ -3,6 +3,61 @@
 import type { PDFPageProxy } from "pdfjs-dist";
 import { pdfjs } from "@/lib/pdf";
 
+/**
+ * Recorta pedaços quaisquer da folha, já desenhada.
+ *
+ * Serve pra fórmula: a equação não é uma imagem dentro do PDF (é texto em fonte
+ * de matemática), então não tem como achá-la entre as pinturas da página — o que
+ * se tem é o retângulo onde ela está, e é dele que sai o recorte.
+ *
+ * Desenha a página **uma vez** e corta todas as caixas dela: uma renderização
+ * por fórmula deixaria a página lenta num livro cheio de equação.
+ */
+export async function recortarCaixas(
+  page: PDFPageProxy,
+  caixas: { x: number; y: number; w: number; h: number }[],
+  escala = 2,
+): Promise<({ url: string; largura: number; altura: number } | null)[]> {
+  if (!caixas.length) return [];
+
+  const viewport = page.getViewport({ scale: escala });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return caixas.map(() => null);
+
+  // Fundo branco: sem isso o recorte de uma página sem fundo sai preto.
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+
+  return Promise.all(
+    caixas.map(async (c) => {
+      // O eixo y do PDF cresce pra cima e o do canvas pra baixo: o topo da caixa
+      // (y + h) é que vira a borda de cima do recorte.
+      const sx = Math.max(0, Math.round(c.x * escala));
+      const sy = Math.max(0, Math.round(canvas.height - (c.y + c.h) * escala));
+      const sw = Math.min(canvas.width - sx, Math.round(c.w * escala));
+      const sh = Math.min(canvas.height - sy, Math.round(c.h * escala));
+      if (sw < 2 || sh < 2) return null;
+
+      const recorte = document.createElement("canvas");
+      recorte.width = sw;
+      recorte.height = sh;
+      const rctx = recorte.getContext("2d");
+      if (!rctx) return null;
+      rctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        recorte.toBlob(resolve, "image/png"),
+      );
+      if (!blob) return null;
+      return { url: URL.createObjectURL(blob), largura: sw, altura: sh };
+    }),
+  );
+}
+
 /** Um recorte de imagem já pronto para exibir, com a posição no espaço da página (pt, escala 1). */
 export type ImagemPagina = {
   url: string;

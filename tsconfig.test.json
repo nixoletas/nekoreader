@@ -1,0 +1,15 @@
+{
+  "//": "Compila os módulos puros de `src/lib` pra JS que roda no node, pros testes de test/.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "outDir": "node_modules/.cache/teste",
+    "module": "esnext",
+    "target": "es2022",
+    "jsx": "preserve",
+    "incremental": false
+  },
+  "include": ["src/lib/**/*.ts"],
+  "exclude": ["src/lib/supabase/**"]
+}

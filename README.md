@@ -22,6 +22,24 @@ texto, marcador de página e memória de onde você parou.
 | Marcar página (★) e lista de páginas guardadas | painel |
 | Salva a última página lida sozinho (debounce 700ms) | automático |
 | Instalável no celular (PWA, standalone, ícone próprio) | manifest + SW |
+| Numeração do **livro** (ignora capa/rosto/sumário), inclusive romana | automático |
+| Conferir a folha original sem sair do texto remontado | leitor, modo Texto |
+| Exportar o livro em EPUB ou Markdown, com a página anotada | leitor |
+| OCR de página digitalizada, no próprio aparelho | leitor, modo Texto |
+| Equação destacada vira recorte da folha, em vez de texto embaralhado | modo Texto |
+
+### Numeração do livro
+
+Um PDF conta a partir da capa; o livro conta a partir do primeiro capítulo. A
+página 121 do arquivo costuma ser a 105 do livro — e é a do livro que aparece na
+citação, no índice e na conversa com outra pessoa.
+
+O leitor descobre isso sozinho: usa `/PageLabels` quando o arquivo traz, e senão
+lê o número impresso no rodapé de uma amostra de páginas e tira a moda de
+"página do arquivo − número impresso". A abertura em romano (i, ii, … xvi) sai
+junto. Daí em diante toda a interface fala essa numeração — barra, marcações,
+sumário, grade de páginas, a pergunta de "continuar do outro aparelho" — e o
+campo "ir para a página" aceita tanto `87` quanto `xix`.
 
 Marcações são salvas como retângulos em **fração da página (0..1)**, então
 continuam no lugar certo em qualquer zoom ou tamanho de tela. O véu é
@@ -80,6 +98,17 @@ produção — o SW só registra em produção:
 npm run build && npm start
 ```
 
+### Testes
+
+```bash
+npm test
+```
+
+`pretest` compila os módulos puros de `src/lib` pro node (em
+`node_modules/.cache/teste`) e `node --test` roda `test/`. São testes da parte
+que erra caro e não dá pra conferir de olho: a numeração impressa, a detecção de
+fórmula (principalmente o que **não** é fórmula) e a conversão pra EPUB/Markdown.
+
 ## 3. Deploy na Vercel
 
 ```bash
@@ -111,6 +140,10 @@ src/
   lib/
     supabase/{client,server,session}.ts
     pdf.ts                     worker do pdf.js, nº de páginas e capa
+    pdf-blocos.ts              remontagem: linha → parágrafo, título, tabela, fórmula
+    pdf-rotulos.ts             numeração impressa do livro (folio, romano, deslocamento)
+    pdf-ocr.ts                 página digitalizada → os mesmos Item do pdf.js
+    exportar.ts                blocos → EPUB 3 (com page-list) e Markdown
     types.ts                   Book, Highlight, Bookmark, Rect, cores
   app/
     globals.css                paleta, grão, estilo das marcações
@@ -146,6 +179,10 @@ supabase/schema.sql            tabelas, RLS, bucket
 ## Limites conhecidos
 
 - Leitura é **uma página por vez** (não é scroll contínuo).
-- Marcação depende da camada de texto do PDF: PDF escaneado sem OCR não deixa
-  selecionar.
+- No modo Página, marcar depende da camada de texto do PDF. Página digitalizada
+  precisa do OCR (modo Texto), que é sob demanda, uma página por vez.
+- O OCR baixa o dicionário do idioma de um CDN na primeira vez (fica no
+  IndexedDB depois). O worker e o núcleo WASM são servidos pelo próprio app.
+- A numeração do livro sai da camada de texto: livro digitalizado só ganha ela
+  depois do OCR, página a página.
 - Limite de 100 MB por arquivo (ajustável em `supabase/schema.sql`).

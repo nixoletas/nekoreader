@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { abrirDoc } from "@/lib/pdf";
 import { CachePaginas } from "@/lib/pdf-cache";
 import { extrairBlocos } from "@/lib/pdf-text";
+import { obterOcr, salvarOcr } from "@/lib/offline-db";
 import type { Bloco } from "@/lib/pdf-blocos";
 import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
 import type { Highlight, HighlightColor, TextSpan } from "@/lib/types";
@@ -16,6 +17,7 @@ const PAGINAS_EM_CACHE = 8;
 /** Modo texto do PDF: remonta a página em blocos e entrega pro leitor comum. */
 export default function PdfText({
   fileUrl,
+  bookId,
   pageNumber,
   escala,
   highlights,
@@ -26,6 +28,8 @@ export default function PdfText({
   onModoPagina,
 }: {
   fileUrl: string;
+  /** Identifica o livro pra guardar o que o OCR reconhecer. */
+  bookId: string;
   pageNumber: number;
   escala: number;
   highlights: Highlight[];
@@ -42,6 +46,9 @@ export default function PdfText({
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<number | null>(null);
+  /** Reconhecimento de página digitalizada em andamento. */
+  const [lendoImagem, setLendoImagem] = useState(false);
+  const ocrEmCurso = useRef<AbortController | null>(null);
 
   // Páginas já remontadas — o cache é dono dos object URL das imagens que guarda.
   const [cache] = useState(
@@ -58,6 +65,7 @@ export default function PdfText({
     setBlocos(cache.obter(alvo) ?? null);
     setErro(null);
     setProgresso(null);
+    setLendoImagem(false);
   }
 
   useEffect(() => {
@@ -80,8 +88,19 @@ export default function PdfText({
           revogarBlocos(extraidos);
           return;
         }
-        cache.definir(chave, extraidos);
-        setBlocos(extraidos);
+
+        // Página digitalizada: se o OCR já rodou nela alguma vez, o texto
+        // reconhecido entra no lugar do nada que o PDF tem a oferecer.
+        const semTexto = !extraidos.some((b) => b.tipo !== "imagem");
+        const guardado = semTexto ? await obterOcr(bookId, pageNumber) : undefined;
+        if (!vivo) {
+          revogarBlocos(extraidos);
+          return;
+        }
+
+        const finais = guardado ?? extraidos;
+        cache.definir(chave, finais);
+        setBlocos(finais);
       } catch (e) {
         if (vivo) setErro(e instanceof Error ? e.message : "Falhou ao ler o PDF.");
       }
@@ -89,8 +108,46 @@ export default function PdfText({
 
     return () => {
       vivo = false;
+      // Virar a página no meio de um OCR joga fora o reconhecimento: ele é da
+      // página que saiu da tela.
+      ocrEmCurso.current?.abort();
     };
-  }, [fileUrl, pageNumber, onLoadSuccess, cache]);
+  }, [fileUrl, bookId, pageNumber, onLoadSuccess, cache]);
+
+  /**
+   * Lê a página digitalizada com OCR, a pedido.
+   *
+   * Nunca automático: são segundos de processador por página e, na primeira vez,
+   * o download do dicionário do idioma. Quem decide pagar isso é a pessoa — e o
+   * resultado fica guardado, então ela paga uma vez por página.
+   */
+  const rodarOcr = useCallback(async () => {
+    ocrEmCurso.current?.abort();
+    const meu = new AbortController();
+    ocrEmCurso.current = meu;
+    setLendoImagem(true);
+    setErro(null);
+
+    try {
+      const { blocosPorOcr } = await import("@/lib/pdf-ocr");
+      const doc = await abrirDoc(fileUrl);
+      const lidos = await blocosPorOcr(doc, pageNumber, { sinal: meu.signal });
+      if (meu.signal.aborted) return;
+
+      cache.definir(`${fileUrl}#${pageNumber}`, lidos);
+      setBlocos(lidos);
+      void salvarOcr(bookId, pageNumber, lidos).catch(() => {});
+    } catch (e) {
+      if (meu.signal.aborted) return;
+      setErro(
+        e instanceof Error && e.message
+          ? `Não consegui reconhecer o texto: ${e.message}`
+          : "Não consegui reconhecer o texto desta página.",
+      );
+    } finally {
+      if (!meu.signal.aborted) setLendoImagem(false);
+    }
+  }, [fileUrl, bookId, pageNumber, cache]);
 
   return (
     <LeitorTexto
@@ -104,7 +161,9 @@ export default function PdfText({
       onDeleteHighlight={onDeleteHighlight}
       onSwipe={onSwipe}
       onModoPagina={onModoPagina}
-      textoSemConteudo="Esta página não tem texto para ler — provavelmente é digitalizada (imagem). Só o modo Página mostra ela."
+      onOcr={() => void rodarOcr()}
+      lendoImagem={lendoImagem}
+      textoSemConteudo="Esta página não tem camada de texto — é digitalizada. Dá pra reconhecer o texto dela aqui mesmo, no seu aparelho."
     />
   );
 }

@@ -20,10 +20,19 @@ export type Bloco =
   /** Nota de rodapé: mesmo texto corrido, só que em corpo menor e no pé da página. */
   | { tipo: "nota"; texto: string; negrito: Faixa[]; italico: Faixa[]; sobrescrito: Faixa[]; links: Elo[] }
   | { tipo: "codigo"; texto: string }
+  /**
+   * Equação destacada. O texto sai embaralhado do PDF (o arquivo guarda glifo
+   * solto, não fórmula), então o que vale é o recorte da folha; `texto` fica
+   * como descrição e como o que a busca enxerga.
+   */
+  | { tipo: "formula"; texto: string; caixa: Caixa; url?: string; largura?: number; altura?: number }
   | { tipo: "tabela"; linhas: string[][] }
   /** Página de sumário impressa no próprio livro ("Prefácio ....... xix"). */
   | { tipo: "sumario"; entradas: EntradaSumario[] }
   | { tipo: "imagem"; url: string; largura: number; altura: number };
+
+/** Retângulo na página, em pontos do PDF (o eixo y cresce pra cima). */
+export type Caixa = { x: number; y: number; w: number; h: number };
 
 /** Uma linha da página de sumário: o título de um lado, a página do outro. */
 export type EntradaSumario = {
@@ -37,6 +46,20 @@ export type EntradaSumario = {
 /** Bloco com a posição vertical (pt) que ele ocupava na página — só pra encaixar as imagens. */
 export type BlocoPosicionado = { y: number; bloco: Bloco };
 
+/**
+ * O que saiu de uma página: o conteúdo em colunas e o número que o livro imprime
+ * nela.
+ *
+ * O folio vem da mesma linha de mobília que a remontagem descarta — e é ele que
+ * permite dizer "página 3 do livro" numa página física 17, que é como a pessoa
+ * lê a referência do índice e da citação.
+ */
+export type PaginaRemontada = {
+  colunas: BlocoPosicionado[][];
+  /** Como está impresso: "38", "xix". `null` quando a página não traz número. */
+  folio: string | null;
+};
+
 export type Item = {
   texto: string;
   x: number;
@@ -49,6 +72,8 @@ export type Item = {
   mono: boolean;
   /** Fonte itálica (o nome dela termina em -It, Italic, Oblique...). */
   italico: boolean;
+  /** Fonte de matemática (CMMI, CMSY, MathematicalPi, Symbol...) — sinal de fórmula. */
+  matematica?: boolean;
   /** Item que só carrega espaço — separa palavras, não conta como conteúdo. */
   espaco: boolean;
 };
@@ -56,7 +81,7 @@ export type Item = {
 /** Um pedaço de linha separado do vizinho por um vão grande — vira célula de tabela. */
 type Celula = { texto: string; x: number; dir: number };
 
-type Linha = {
+export type Linha = {
   texto: string;
   x: number;
   dir: number;
@@ -76,6 +101,8 @@ type Linha = {
   italico: Faixa[];
   /** Chamada de nota e expoente ("¹", "²"), na mesma contagem de caracteres. */
   sobrescrito: Faixa[];
+  /** Quanto da linha foi escrito em fonte de matemática, de 0 a 1. */
+  mate: number;
 };
 
 /** Como a linha vai ser tratada. */
@@ -85,6 +112,7 @@ type Classe =
   | { tipo: "citacao" }
   | { tipo: "nota" }
   | { tipo: "codigo" }
+  | { tipo: "formula" }
   | { tipo: "tabela" }
   | { tipo: "sumario" };
 
@@ -96,8 +124,18 @@ type Classe =
  * Heurística: acerta livro corrido, erra tabela e fórmula.
  */
 export function remontarColunas(itens: Item[], pw: number): BlocoPosicionado[][] {
+  return remontarPagina(itens, pw).colunas;
+}
+
+/**
+ * O mesmo que `remontarColunas`, mas devolve junto o número impresso na página.
+ *
+ * São a mesma passagem porque é ela que sabe qual linha é mobília: separar isso
+ * em duas funções faria a detecção de cabeçalho rodar duas vezes por página.
+ */
+export function remontarPagina(itens: Item[], pw: number): PaginaRemontada {
   const cheios = itens.filter((i) => !i.espaco);
-  if (!cheios.length) return [];
+  if (!cheios.length) return { colunas: [], folio: null };
 
   // Fonte do corpo = a que escreve mais caractere na página. Título costuma ser
   // outra fonte (negrito), e é esse contraste que identifica ele — mais confiável
@@ -108,10 +146,15 @@ export function remontarColunas(itens: Item[], pw: number): BlocoPosicionado[][]
     mediana(cheios.map((i) => i.alt)) ||
     10;
 
-  return separarColunas(itens, pw).map((col) => {
-    const linhas = semCabecalho(agruparLinhas(col, corpo, fonteCorpo), corpo);
-    return juntarParagrafos(linhas, corpo);
+  // O folio é um por página, não por coluna: vale o primeiro que aparecer.
+  let folio: string | null = null;
+  const colunas = separarColunas(itens, pw).map((col) => {
+    const limpo = semCabecalho(agruparLinhas(col, corpo, fonteCorpo), corpo);
+    folio ??= limpo.folio;
+    return juntarParagrafos(limpo.linhas, corpo);
   });
+
+  return { colunas, folio };
 }
 
 /** Fonte que escreve mais caractere — o corpo do texto da página. */
@@ -280,11 +323,17 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       while (/\s$/.test(texto)) texto = texto.slice(0, -1);
 
       const esq = Math.min(...cheios.map((i) => i.x));
+      const letras = cheios.reduce((n, i) => n + i.texto.trim().length, 0);
+      const emMate = cheios
+        .filter((i) => i.matematica)
+        .reduce((n, i) => n + i.texto.trim().length, 0);
+
       return {
         texto,
         negrito,
         italico,
         sobrescrito,
+        mate: letras ? emMate / letras : 0,
         x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
@@ -340,8 +389,11 @@ function semRepetidos(itens: Item[]): Item[] {
  * esse buraco. Antes isso era uma faixa fixa de 8% da altura da página, que falhava
  * em PDF com margem torta (tem livro cujo conteúdo começa colado no topo).
  */
-function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
-  if (linhas.length < 4) return linhas;
+function semCabecalho(
+  linhas: Linha[],
+  corpo: number,
+): { linhas: Linha[]; folio: string | null } {
+  if (linhas.length < 4) return { linhas, folio: null };
   const largura = Math.max(...linhas.map((l) => l.dir - l.x), 1);
   const esquerda = mediana(linhas.map((l) => l.x));
   const vaos: number[] = [];
@@ -384,7 +436,49 @@ function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
   const fora = new Set<number>();
   if (ehMobilia(0)) fora.add(0);
   if (ehMobilia(linhas.length - 1)) fora.add(linhas.length - 1);
-  return linhas.filter((_, i) => !fora.has(i));
+
+  // O rodapé é o lugar mais comum do número, então ele tem preferência sobre o
+  // topo — onde o que costuma estar é o título corrido.
+  let folio: string | null = null;
+  if (fora.has(linhas.length - 1)) folio = folioDaLinha(linhas[linhas.length - 1]);
+  if (!folio && fora.has(0)) folio = folioDaLinha(linhas[0]);
+
+  return { linhas: linhas.filter((_, i) => !fora.has(i)), folio };
+}
+
+/** Romano de verdade — trava contra palavra que por acaso só usa essas letras ("civil", "did"). */
+const ROMANO = /^(?=[ivxlcdm]+$)m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/;
+
+/**
+ * O número que a linha de mobília imprime — "38", "xix" — ou `null`.
+ *
+ * Três formas cobrem quase todo livro: o número sozinho, o número numa ponta do
+ * título corrido ("38 | Capítulo 2", "SEC. 1.1 USES OF NETWORKS 9"), e nada.
+ * Romano só em minúscula: "I" e "MIX" em versalete são palavra muito mais vezes
+ * que numeral, e a abertura do livro (onde o romano vive) é sempre em minúscula.
+ */
+export function folioDaLinha(l: Linha): string | null {
+  const texto = l.texto.trim();
+
+  const sozinho = texto.replace(/[\s.\-—–|[\]()]/g, "");
+  if (/^\d{1,4}$/.test(sozinho)) return sozinho;
+  if (ROMANO.test(sozinho)) return sozinho;
+
+  const naPonta = texto.match(/^(\d{1,4})\s*[|·–—]/) ?? texto.match(/[|·–—]\s*(\d{1,4})$/);
+  if (naPonta) return naPonta[1];
+
+  // Sem separador: o número é a célula da ponta, destacada do resto por um vão.
+  const cs = l.celulas;
+  if (cs.length >= 2) {
+    const folga = l.alt * 3;
+    const ultima = cs[cs.length - 1];
+    if (/^\d{1,4}$/.test(ultima.texto) && ultima.x - cs[cs.length - 2].dir > folga) {
+      return ultima.texto;
+    }
+    if (/^\d{1,4}$/.test(cs[0].texto) && cs[1].x - cs[0].dir > folga) return cs[0].texto;
+  }
+
+  return null;
 }
 
 /**
@@ -394,12 +488,16 @@ function semCabecalho(linhas: Linha[], corpo: number): Linha[] {
  * pouco maior que o corpo (aqui, 13.65 contra 12.40 — só 10% a mais), então
  * exigir "bem maior" deixava passar direto. O nível sai da proporção.
  */
-function classificar(l: Linha, corpo: number, esquerda: number): Classe {
+function classificar(l: Linha, corpo: number, esquerda: number, largura: number): Classe {
   const proporcao = l.alt / corpo;
 
   // Linha inteira em fonte monoespaçada é código. Trecho solto de `código` no meio
   // da frase não conta — ali a linha é mista, e vira parágrafo normal.
   if (l.soMono) return { tipo: "codigo" };
+
+  // Antes do título: equação destacada costuma ser curta, centrada e sem texto —
+  // que é exatamente o desenho de um título.
+  if (pareceFormula(l, esquerda, largura)) return { tipo: "formula" };
 
   if (l.soOutraFonte && proporcao >= 1.05) {
     const nivel = proporcao >= 1.7 ? 1 : proporcao >= 1.28 ? 2 : 3;
@@ -412,6 +510,44 @@ function classificar(l: Linha, corpo: number, esquerda: number): Classe {
   }
 
   return { tipo: "paragrafo" };
+}
+
+/**
+ * Esta linha é uma equação destacada?
+ *
+ * O PDF não guarda fórmula: guarda glifo solto, com a fonte de matemática e a
+ * posição de cada pedaço. Remontar isso como texto produz aquele amontoado
+ * ("f(x)=�xi 2n") que não quer dizer nada — melhor mostrar o recorte da folha.
+ *
+ * O teste é de propósito **conservador**, porque o erro caro é o contrário:
+ * trocar um parágrafo de verdade por uma imagem. Dois caminhos, os dois exigindo
+ * que a linha quase não tenha palavra:
+ *
+ * 1. A linha foi escrita em fonte de matemática (o sinal mais confiável que
+ *    existe — o gerador do PDF trocou de fonte justamente porque ali é fórmula).
+ * 2. Sem essa pista, exige o **desenho** da equação destacada: centrada na
+ *    coluna, curta, e cheia de sinal de operação.
+ */
+function pareceFormula(l: Linha, esquerda: number, largura: number): boolean {
+  const semEspaco = l.texto.replace(/\s/g, "");
+  if (semEspaco.length < 2) return false;
+
+  // Palavra de verdade — o que uma fórmula quase não tem. ("de", "e" e afins
+  // aparecem em legenda de fórmula, então o corte é em 4 letras.)
+  const palavras = (l.texto.match(/[A-Za-zÀ-ÿ]{4,}/g) ?? []).length;
+  if (palavras > 2) return false;
+
+  if (l.mate >= 0.5) return true;
+
+  const sinais = (l.texto.match(/[=+±∓×÷≤≥≠≈∝∞∫∑∏√∂∇⋅^_<>|]/g) ?? []).length;
+  const gregas = (l.texto.match(/[α-ωΑ-Ωµπ]/g) ?? []).length;
+  const meio = esquerda + largura / 2;
+  const centrada =
+    Math.abs((l.x + l.dir) / 2 - meio) < largura * 0.12 && l.dir - l.x < largura * 0.9;
+
+  return (
+    centrada && palavras <= 1 && sinais >= 1 && (sinais + gregas) / semEspaco.length >= 0.2
+  );
 }
 
 /**
@@ -643,7 +779,7 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
   if (!linhas.length) return [];
   const esquerda = mediana(linhas.map((l) => l.x));
   const largura = mediana(linhas.map((l) => l.dir - l.x));
-  const classes = linhas.map((l) => classificar(l, corpo, esquerda));
+  const classes = linhas.map((l) => classificar(l, corpo, esquerda, largura));
   // Antes da tabela: entrada de sumário também quebra em duas colunas, e sem
   // isto a página inteira de sumário viraria uma tabela de duas colunas.
   marcarSumario(linhas, classes);
@@ -757,6 +893,20 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
 
   if (classe.tipo === "tabela") {
     return { tipo: "tabela", linhas: linhas.map((l) => l.celulas.map((c) => c.texto)) };
+  }
+
+  if (classe.tipo === "formula") {
+    // A caixa sai com folga: expoente e índice ficam fora da altura da linha, e
+    // um recorte apertado corta o topo do somatório.
+    const x = Math.min(...linhas.map((l) => l.x));
+    const dir = Math.max(...linhas.map((l) => l.dir));
+    const topo = Math.max(...linhas.map((l) => l.y + l.alt * 1.35));
+    const base = Math.min(...linhas.map((l) => l.y - l.alt * 0.5));
+    return {
+      tipo: "formula",
+      texto: linhas.map((l) => l.texto).join(" "),
+      caixa: { x, y: base, w: dir - x, h: topo - base },
+    };
   }
 
   let texto = "";
