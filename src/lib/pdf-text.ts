@@ -23,12 +23,16 @@ export async function extrairBlocos(
 ): Promise<Bloco[]> {
   const page = await doc.getPage(pageNumber);
   const { width: pw } = page.getViewport({ scale: 1 });
-  const [conteudo, imagens] = await Promise.all([
-    page.getTextContent(),
-    // Também é o que resolve as fontes de verdade em `commonObjs` (ele percorre a
-    // lista de operadores) — sem isso não dá pra saber qual trecho é itálico.
-    extrairImagens(page),
-  ]);
+  const conteudo = await page.getTextContent();
+
+  // Livro digitalizado com camada de texto por cima: a folha escaneada é uma imagem
+  // do tamanho da página inteira. Onde já existe texto pra ler, ela sai — senão a
+  // página apareceria duas vezes, em foto e em letra. Sem texto nenhum ela fica: é
+  // tudo o que a página tem.
+  const temTexto = conteudo.items.some((it) => "str" in it && it.str.trim() !== "");
+  // Também é o que resolve as fontes de verdade em `commonObjs` (ele percorre a
+  // lista de operadores) — sem isso não dá pra saber qual trecho é itálico.
+  const imagens = await extrairImagens(page, { ignorarFolha: temTexto });
 
   const { italicas, matematicas } = classificarFontes(page, conteudo.styles);
 

@@ -78,6 +78,10 @@ export type ImagemPagina = {
 const LADO_MIN_PX = 28;
 const AREA_MIN_PX = 1400;
 
+// Acima disso a "imagem" é a folha inteira — o livro digitalizado que carrega o texto
+// numa camada invisível por cima do escaneado. Não é figura da página: é a página.
+const FRACAO_FOLHA = 0.92;
+
 const ESCALA_MAX = 2.5;
 const LARGURA_ALVO_PX = 1500;
 
@@ -96,7 +100,10 @@ type Caixa = { x: number; y: number; w: number; h: number; px: number; py: numbe
  * Renderiza a página inteira uma vez (só quando há imagem) e tira o recorte dali — mais simples
  * e mais fiel que decodificar o XObject na mão (cor, máscara etc. já saem certos).
  */
-export async function extrairImagens(page: PDFPageProxy): Promise<ImagemPagina[]> {
+export async function extrairImagens(
+  page: PDFPageProxy,
+  { ignorarFolha = false }: { ignorarFolha?: boolean } = {},
+): Promise<ImagemPagina[]> {
   const { OPS, Util } = pdfjs;
   const OPS_IMAGEM = new Set<number>([
     OPS.paintImageXObject,
@@ -147,6 +154,16 @@ export async function extrairImagens(page: PDFPageProxy): Promise<ImagemPagina[]
     const y = Math.min(...ys);
     const w = Math.max(...xs) - x;
     const h = Math.max(...ys) - y;
+
+    // Fundo digitalizado da folha: mostrar isso junto do texto seria repetir a página
+    // inteira em imagem e, logo abaixo, ela de novo em letra.
+    if (
+      ignorarFolha &&
+      w >= viewportBase.width * FRACAO_FOLHA &&
+      h >= viewportBase.height * FRACAO_FOLHA
+    ) {
+      continue;
+    }
 
     const cantosPx = cantos.map(([px, py]) => viewport.convertToViewportPoint(px, py) as [number, number]);
     const xsPx = cantosPx.map((c) => c[0]);
