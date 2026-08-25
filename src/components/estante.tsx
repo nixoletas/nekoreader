@@ -42,7 +42,7 @@ const AdicionarLivro = dynamic(() => import("@/components/adicionar-livro"), {
  * livro ainda não aberto aqui mostra a página do arquivo, como antes.
  */
 function PosicaoDoLivro({ book }: { book: Book }) {
-  const rotulos = useRotulos(book.id, null, book.format);
+  const rotulos = useRotulos(book.id, null, book.format, book.page_labels);
   const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
 
   return (

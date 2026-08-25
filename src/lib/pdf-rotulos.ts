@@ -36,6 +36,27 @@ const ABERTURA = 48;
 const CONFERENCIA = 40;
 
 /**
+ * Quanto da amostra precisa ter sido lida pra varredura valer como resposta.
+ *
+ * Página que não abre (arquivo quebrado, rede caindo no meio do streaming) não
+ * conta como "página sem número impresso": se metade da amostra falha, a dedução
+ * enxerga um livro sem numeração que não existe — e essa resposta fica guardada.
+ */
+const COBERTURA_MINIMA = 0.6;
+
+/**
+ * O que uma varredura conclui.
+ *
+ * `sem-numeracao` e `incompleta` mostram a mesma coisa na tela (a página física),
+ * mas são coisas diferentes na hora de guardar: a primeira é resposta final, a
+ * segunda é uma tentativa que vale repetir.
+ */
+export type Varredura =
+  | { fim: "achou"; rotulos: Rotulos }
+  | { fim: "sem-numeracao" }
+  | { fim: "incompleta" };
+
+/**
  * Descobre a numeração impressa do livro.
  *
  * Dois caminhos, nesta ordem:
@@ -48,32 +69,39 @@ const CONFERENCIA = 40;
  *    livro inteiro. Por isso o deslocamento sai da moda da amostra, e não da
  *    primeira página numerada que aparecer.
  *
- * Devolve `null` quando o livro não tem numeração própria (ou ela não foi
+ * Diz `sem-numeracao` quando o livro não tem numeração própria (ou ela não foi
  * reconhecida) — aí a página física é a única verdade que existe, e o leitor
- * segue mostrando ela.
+ * segue mostrando ela. Diz `incompleta` quando desistiu no meio (cancelada, ou
+ * amostra que não deu pra ler): parece o mesmo na tela, mas não é resposta.
  */
 export async function montarRotulos(
   doc: PDFDocumentProxy,
   { sinal, aoProgredir }: { sinal?: AbortSignal; aoProgredir?: (fracao: number) => void } = {},
-): Promise<Rotulos | null> {
+): Promise<Varredura> {
   const declarados = await rotulosDeclarados(doc);
-  if (declarados) return declarados;
+  if (declarados) return { fim: "achou", rotulos: declarados };
 
   const paginas = amostra(doc.numPages);
   const achados: { fisica: number; folio: string }[] = [];
+  let lidas = 0;
 
   for (let i = 0; i < paginas.length; i += LOTE) {
-    if (sinal?.aborted) return null;
+    if (sinal?.aborted) return { fim: "incompleta" };
     const lote = paginas.slice(i, i + LOTE);
     const folios = await Promise.all(lote.map((p) => folioDaPagina(doc, p)));
     lote.forEach((fisica, j) => {
-      const folio = folios[j];
-      if (folio) achados.push({ fisica, folio });
+      const lido = folios[j];
+      if (!lido.lida) return;
+      lidas++;
+      if (lido.folio) achados.push({ fisica, folio: lido.folio });
     });
     aoProgredir?.(Math.min(1, (i + LOTE) / paginas.length));
   }
 
-  return deduzir(achados, doc.numPages);
+  if (lidas < paginas.length * COBERTURA_MINIMA) return { fim: "incompleta" };
+
+  const rotulos = deduzir(achados, doc.numPages);
+  return rotulos ? { fim: "achou", rotulos } : { fim: "sem-numeracao" };
 }
 
 /** Os rótulos que o próprio arquivo declara — só valem se disserem algo novo. */
@@ -107,10 +135,19 @@ function amostra(total: number): number[] {
   return [...paginas].sort((a, b) => a - b);
 }
 
-async function folioDaPagina(doc: PDFDocumentProxy, pagina: number): Promise<string | null> {
+/**
+ * O número impresso desta página — e, antes disso, se a página deu pra ler.
+ *
+ * A distinção é o que separa "página sem folio" (normal: abertura, página de
+ * parte) de "página que não abriu", que não pode contar como evidência de nada.
+ */
+async function folioDaPagina(
+  doc: PDFDocumentProxy,
+  pagina: number,
+): Promise<{ lida: boolean; folio: string | null }> {
   const lido = await itensDaPagina(doc, pagina);
-  if (!lido) return null;
-  return remontarPagina(lido.itens, lido.pw).folio;
+  if (!lido) return { lida: false, folio: null };
+  return { lida: true, folio: remontarPagina(lido.itens, lido.pw).folio };
 }
 
 /**

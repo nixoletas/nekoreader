@@ -60,8 +60,13 @@ function paginaFalsa({ folio = null, linhas = 22 } = {}) {
   return itens;
 }
 
-/** O mínimo de `PDFDocumentProxy` que a varredura usa: contagem, viewport e texto. */
-function docFalso(folioDe, numPages, { rotulosDeclarados = null } = {}) {
+/**
+ * O mínimo de `PDFDocumentProxy` que a varredura usa: contagem, viewport e texto.
+ *
+ * `quebrada` diz quais páginas estouram na leitura — é o PDF corrompido, ou a
+ * rede caindo no meio do streaming.
+ */
+function docFalso(folioDe, numPages, { rotulosDeclarados = null, quebrada = () => false } = {}) {
   return {
     numPages,
     getPageLabels: async () => rotulosDeclarados,
@@ -77,6 +82,14 @@ function docFalso(folioDe, numPages, { rotulosDeclarados = null } = {}) {
           fontName: i.fonte,
         })),
       }),
+      // depois do normal, pra sobrescrever: página quebrada estoura na leitura
+      ...(quebrada(n)
+        ? {
+            getTextContent: async () => {
+              throw new Error("página não abriu");
+            },
+          }
+        : {}),
     }),
   };
 }
@@ -121,7 +134,9 @@ test("página sem número impresso não inventa nenhum", () => {
 });
 
 test("o deslocamento do livro é descoberto pela varredura", async () => {
-  const rotulos = await montarRotulos(docFalso(folioDoLivro, 200));
+  const varredura = await montarRotulos(docFalso(folioDoLivro, 200));
+  assert.equal(varredura.fim, "achou");
+  const { rotulos } = varredura;
 
   assert.ok(rotulos, "devia ter achado a numeração");
   assert.equal(rotulos.fonte, "texto");
@@ -145,7 +160,7 @@ test("o deslocamento do livro é descoberto pela varredura", async () => {
 test("número solto em página avulsa não desloca o livro inteiro", async () => {
   // Uma página do miolo com um número que não é folio (ano numa tabela, nota).
   const comRuido = (n) => (n === 60 ? "1987" : folioDoLivro(n));
-  const rotulos = await montarRotulos(docFalso(comRuido, 200));
+  const { rotulos } = await montarRotulos(docFalso(comRuido, 200));
 
   assert.ok(rotulos);
   assert.equal(rotulos.inicioArabico, 17, "a moda da amostra ignora o número solto");
@@ -153,21 +168,45 @@ test("número solto em página avulsa não desloca o livro inteiro", async () =>
 });
 
 test("livro em que o arquivo já bate com a numeração não vira caso especial", async () => {
-  const rotulos = await montarRotulos(docFalso((n) => String(n), 120));
+  const { rotulos } = await montarRotulos(docFalso((n) => String(n), 120));
   // Achou (o deslocamento é zero), mas não é "numeração própria" — a tela segue
   // mostrando um número só.
   assert.equal(numeracaoPropria(rotulos), false);
 });
 
 test("livro sem número nenhum impresso não inventa numeração", async () => {
-  assert.equal(await montarRotulos(docFalso(() => null, 120)), null);
+  const varredura = await montarRotulos(docFalso(() => null, 120));
+  assert.equal(varredura.fim, "sem-numeracao", "varreu inteiro: é resposta, e final");
+});
+
+test("varredura cancelada no meio não vira 'este livro não numera'", async () => {
+  const controle = new AbortController();
+  controle.abort();
+  const varredura = await montarRotulos(docFalso(folioDoLivro, 200), {
+    sinal: controle.signal,
+  });
+
+  // A diferença que importa: `incompleta` não é resposta, então não fica
+  // guardada como final — quem cancelou vai varrer de novo na próxima abertura.
+  assert.equal(varredura.fim, "incompleta");
+});
+
+test("amostra que não deu pra ler não vira 'este livro não numera'", async () => {
+  // Metade das páginas estourando: a dedução até chegaria a "sem numeração",
+  // mas a evidência não existe — foi o que fazia o mesmo livro contar 708
+  // páginas num aparelho e 697 no outro.
+  const varredura = await montarRotulos(
+    docFalso(folioDoLivro, 200, { quebrada: (n) => n % 2 === 0 }),
+  );
+
+  assert.equal(varredura.fim, "incompleta");
 });
 
 test("os rótulos declarados pelo PDF ganham da varredura", async () => {
   const declarados = Array.from({ length: 30 }, (_, i) =>
     i < 10 ? romano(i + 1) : String(i - 9),
   );
-  const rotulos = await montarRotulos(docFalso(folioDoLivro, 30, {
+  const { rotulos } = await montarRotulos(docFalso(folioDoLivro, 30, {
     rotulosDeclarados: declarados,
   }));
 

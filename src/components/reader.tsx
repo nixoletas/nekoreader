@@ -331,7 +331,7 @@ function ReaderCarregado({
   // A numeração impressa do livro — a que ignora capa, rosto e sumário e começa
   // o "1" lá pela página 17 do arquivo. Chega depois da primeira renderização
   // (é uma varredura); até lá `rotulo` devolve a página física, como antes.
-  const rotulos = useRotulos(book.id, fileUrl, book.format);
+  const rotulos = useRotulos(book.id, fileUrl, book.format, book.page_labels);
   const rotulo = useCallback(
     (p: number) => rotuloDaPagina(rotulos, p) ?? String(p),
     [rotulos],

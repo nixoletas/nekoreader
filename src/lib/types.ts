@@ -1,3 +1,5 @@
+import type { Rotulos } from "@/lib/pdf-rotulos";
+
 export type Rect = { x: number; y: number; w: number; h: number };
 
 /** Trecho marcado dentro de um bloco de texto remontado (modo Texto). */
@@ -67,8 +69,22 @@ export type Book = {
    */
   positions: Record<string, number> | null;
   last_read_at: string | null;
+  /**
+   * A numeração impressa do livro, descoberta uma vez e válida em todo aparelho.
+   * `null` na coluna = ninguém varreu ainda; `rotulos: null` dentro = varreu, e
+   * este livro não numera por conta própria.
+   */
+  page_labels: RotulosSalvos | null;
   created_at: string;
 };
+
+/**
+ * Como a numeração fica guardada no servidor.
+ *
+ * O `versao` é o mesmo `VERSAO_ROTULOS` do cache local: quando a dedução
+ * melhorar, o que está gravado aqui envelhece junto e é varrido de novo.
+ */
+export type RotulosSalvos = { versao: number; rotulos: Rotulos | null };
 
 export type Highlight = {
   id: string;

@@ -36,7 +36,7 @@ export default function MarcacoesBlog() {
 
   // Aqui a numeração impressa só é lida do que o leitor já descobriu (esta tela
   // nunca abre o arquivo): citar "página 87" tem que dar o mesmo número dos dois lados.
-  const rotulos = useRotulos(bookId, null, book?.format ?? "pdf");
+  const rotulos = useRotulos(bookId, null, book?.format ?? "pdf", book?.page_labels);
 
   const carregar = useCallback(async () => {
     const {

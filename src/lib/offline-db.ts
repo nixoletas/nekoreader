@@ -191,43 +191,97 @@ export async function obterSumario(bookId: string): Promise<ItemSumario[] | unde
  *
  * Descobrir ela custa uma varredura de dezenas de páginas; o resultado não muda
  * (o arquivo é o mesmo), então vale pra sempre. `versao` invalida tudo de uma
- * vez quando a dedução melhorar. `nenhuma` é resposta legítima e guardada
- * também: sem isso, livro sem numeração própria varreria de novo toda abertura.
+ * vez quando a dedução melhorar. "Este livro não numera" é resposta legítima e
+ * guardada também: sem isso, livro sem numeração varreria de novo toda abertura.
+ *
+ * Isto aqui é o cache **deste** aparelho; a resposta boa também vai pro servidor
+ * (`books.page_labels`), pra quem abrir o livro no celular não varrer de novo.
  */
 export type RotulosGuardados = {
   bookId: string;
   versao: number;
   rotulos: Rotulos | null;
+  /**
+   * A varredura chegou ao fim? `false` = tentativa frustrada (cancelada, páginas
+   * que não abriram), que **não** é resposta e vale repetir depois.
+   */
+  conclusivo: boolean;
+  /** Varreduras seguidas que não concluíram — é o que espaça as próximas. */
+  tentativas: number;
   atualizadoEm: number;
 };
 
-export const VERSAO_ROTULOS = 1;
+/**
+ * Versão da dedução. Bumpar aqui joga fora o que todo aparelho guardou — é o
+ * único jeito de corrigir livro que ficou com a resposta errada gravada.
+ *
+ * Mora nesta camada (e não junto da dedução, em `pdf-rotulos.ts`) de propósito:
+ * a estante inteira importa este arquivo, e amarrar ele à dedução arrastaria a
+ * remontagem de PDF pro pacote principal.
+ *
+ * 2: antes disso, varredura interrompida no meio era guardada como "este livro
+ * não tem numeração" — e nunca mais era refeita. Era o que fazia o mesmo livro
+ * mostrar 708 páginas num aparelho e 697 no outro.
+ */
+export const VERSAO_ROTULOS = 2;
 
-export async function salvarRotulos(bookId: string, rotulos: Rotulos | null): Promise<void> {
+/** Espera antes de tentar de novo depois de uma varredura frustrada — dobra a cada tentativa. */
+const ESPERA_BASE = 60 * 60 * 1000;
+const ESPERA_MAX = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * O que este aparelho já sabe sobre a numeração deste livro.
+ *
+ * `sabido` inclui `rotulos: null` — "varri e este livro não numera" é resposta
+ * final tanto quanto uma numeração achada.
+ */
+export type LeituraRotulos =
+  | { estado: "sabido"; rotulos: Rotulos | null }
+  /** Nunca varrido, versão velha, ou espera de uma tentativa frustrada já vencida. */
+  | { estado: "varrer" }
+  /** Varredura frustrada há pouco: não é resposta, mas também não é hora de repetir. */
+  | { estado: "esperar" };
+
+export async function salvarRotulos(
+  bookId: string,
+  rotulos: Rotulos | null,
+  conclusivo = true,
+): Promise<void> {
   const db = await abrirDb();
+  const anterior = await pedido(
+    db.transaction(LOJA_ROTULOS, "readonly").objectStore(LOJA_ROTULOS).get(bookId) as IDBRequest<
+      RotulosGuardados | undefined
+    >,
+  );
   const dado: RotulosGuardados = {
     bookId,
     versao: VERSAO_ROTULOS,
     rotulos,
+    conclusivo,
+    tentativas: conclusivo ? 0 : (anterior?.tentativas ?? 0) + 1,
     atualizadoEm: Date.now(),
   };
   await pedido(db.transaction(LOJA_ROTULOS, "readwrite").objectStore(LOJA_ROTULOS).put(dado));
 }
 
-/**
- * `undefined` = nunca foi calculado (vale varrer); `null` = já foi, e este livro
- * não tem numeração própria.
- */
-export async function obterRotulos(
-  bookId: string,
-): Promise<Rotulos | null | undefined> {
+export async function obterRotulos(bookId: string): Promise<LeituraRotulos> {
   const db = await abrirDb();
   const dado = await pedido(
     db.transaction(LOJA_ROTULOS, "readonly").objectStore(LOJA_ROTULOS).get(bookId) as IDBRequest<
       RotulosGuardados | undefined
     >,
   );
-  return dado?.versao === VERSAO_ROTULOS ? dado.rotulos : undefined;
+
+  if (!dado || dado.versao !== VERSAO_ROTULOS) return { estado: "varrer" };
+  if (dado.conclusivo) return { estado: "sabido", rotulos: dado.rotulos };
+
+  // Arquivo que sempre falha (PDF quebrado) não pode custar uma varredura de
+  // dezenas de páginas a cada abertura — mas também não pode desistir pra sempre.
+  const espera = Math.min(
+    ESPERA_BASE * 2 ** Math.max(0, dado.tentativas - 1),
+    ESPERA_MAX,
+  );
+  return Date.now() - dado.atualizadoEm < espera ? { estado: "esperar" } : { estado: "varrer" };
 }
 
 /* ================================== Prévia da página onde a leitura parou */

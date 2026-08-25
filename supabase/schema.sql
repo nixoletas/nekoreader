@@ -21,6 +21,11 @@ create table if not exists public.books (
   -- positions: { "<página>": <fração 0..1 da rolagem> } — onde a leitura parou em cada
   -- página. Fração, e não pixel, pra valer no computador e no celular do mesmo jeito.
   positions     jsonb not null default '{}'::jsonb,
+  -- page_labels: a numeração impressa do livro, deduzida uma vez pela varredura
+  -- do arquivo — `{ "versao": n, "rotulos": {...} | null }`. Fica aqui, e não só
+  -- no aparelho que varreu, porque é propriedade do arquivo: senão o mesmo livro
+  -- mostra "de 697" no celular e "de 708" no computador.
+  page_labels   jsonb,
   last_read_at  timestamptz,
   created_at    timestamptz not null default now()
 );
@@ -28,6 +33,7 @@ create table if not exists public.books (
 -- coluna nova em bancos já existentes (a criação acima só roda em banco vazio)
 alter table public.books add column if not exists positions jsonb not null default '{}'::jsonb;
 alter table public.books add column if not exists format text not null default 'pdf';
+alter table public.books add column if not exists page_labels jsonb;
 
 create index if not exists books_user_idx on public.books (user_id, created_at desc);
 

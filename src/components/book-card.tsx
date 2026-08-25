@@ -38,7 +38,7 @@ export default function BookCard({
   // A numeração impressa do livro, quando este aparelho já a descobriu (o leitor
   // guarda). Sem isso o card diria "pág. 121" e o leitor "pág. 105" — o mesmo
   // ponto do mesmo livro com dois números.
-  const rotulos = useRotulos(book.id, null, book.format);
+  const rotulos = useRotulos(book.id, null, book.format, book.page_labels);
   const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
 
   const progresso =
