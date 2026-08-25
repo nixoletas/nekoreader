@@ -58,6 +58,20 @@ export async function extrairBlocos(
     });
   }
 
+  // Livro digitalizado: a página inteira numa fonte só, a que o OCR inventou pra
+  // camada de texto. Sem contraste de fonte não existe negrito, e sem negrito
+  // nenhum título é reconhecido — o peso do traço na folha desenhada devolve esse
+  // sinal. No PDF digital o nome da fonte já diz tudo, e desenhar a folha só pra
+  // medir letra seria caro à toa.
+  if (new Set(itens.map((i) => i.fonte)).size === 1) {
+    try {
+      const { medirTraco } = await import("@/lib/pdf-tinta");
+      await medirTraco(page, itens);
+    } catch {
+      // Sem a medida, a página sai como saía antes: tudo parágrafo.
+    }
+  }
+
   const colunas = remontarColunas(itens, pw);
   if (!colunas.length) {
     // página sem texto (digitalizada) — se tiver imagem, ao menos ela aparece

@@ -74,6 +74,12 @@ export type Item = {
   italico: boolean;
   /** Fonte de matemática (CMMI, CMSY, MathematicalPi, Symbol...) — sinal de fórmula. */
   matematica?: boolean;
+  /**
+   * Espessura do traço da letra dividida pela altura da linha — o negrito do
+   * livro digitalizado, medido na folha desenhada (`pdf-tinta.ts`). Só vem
+   * preenchido quando a página não tem contraste de fonte pra oferecer.
+   */
+  traco?: number;
   /** Item que só carrega espaço — separa palavras, não conta como conteúdo. */
   espaco: boolean;
 };
@@ -103,6 +109,8 @@ export type Linha = {
   sobrescrito: Faixa[];
   /** Quanto da linha foi escrito em fonte de matemática, de 0 a 1. */
   mate: number;
+  /** Espessura do traço da linha; 0 quando não foi medida. */
+  traco: number;
 };
 
 /** Como a linha vai ser tratada. */
@@ -146,12 +154,26 @@ export function remontarPagina(itens: Item[], pw: number): PaginaRemontada {
     mediana(cheios.map((i) => i.alt)) ||
     10;
 
+  // Peso do traço do texto comum — a régua contra a qual o negrito se destaca.
+  // Sai 0 quando ninguém mediu, e aí a classificação segue sem esse sinal.
+  //
+  // A mediana é pesada por caractere pelo mesmo motivo que a fonte do corpo é: na
+  // página de solução, quase toda linha é uma linha de código, mas quase toda
+  // *letra* está nos poucos parágrafos de texto. Contando linha por linha, a
+  // régua viraria o traço fino do monoespaçado, e aí a prosa comum passaria por
+  // negrito.
+  const tracoCorpo = medianaPesada(
+    cheios.filter((i) => (i.traco ?? 0) > 0),
+    (i) => i.traco ?? 0,
+    (i) => i.texto.trim().length,
+  );
+
   // O folio é um por página, não por coluna: vale o primeiro que aparecer.
   let folio: string | null = null;
   const colunas = separarColunas(itens, pw).map((col) => {
     const limpo = semCabecalho(agruparLinhas(col, corpo, fonteCorpo), corpo);
     folio ??= limpo.folio;
-    return juntarParagrafos(limpo.linhas, corpo);
+    return juntarParagrafos(limpo.linhas, corpo, tracoCorpo);
   });
 
   return { colunas, folio };
@@ -178,6 +200,31 @@ function mediana(ns: number[]): number {
   if (!ns.length) return 0;
   const ord = [...ns].sort((a, b) => a - b);
   return ord[Math.floor(ord.length / 2)];
+}
+
+/** Mediana em que cada valor conta pelo peso que carrega, não por uma unidade. */
+function medianaPesada<T>(
+  itens: T[],
+  valor: (i: T) => number,
+  peso: (i: T) => number,
+): number {
+  const ord = [...itens].sort((a, b) => valor(a) - valor(b));
+  const total = ord.reduce((n, i) => n + peso(i), 0);
+  if (!total) return 0;
+
+  let acumulado = 0;
+  for (const i of ord) {
+    acumulado += peso(i);
+    if (acumulado * 2 >= total) return valor(i);
+  }
+  return valor(ord[ord.length - 1]);
+}
+
+/** O valor abaixo do qual está a fração `q` da amostra. */
+function percentil(ns: number[], q: number): number {
+  if (!ns.length) return 0;
+  const ord = [...ns].sort((a, b) => a - b);
+  return ord[Math.min(ord.length - 1, Math.floor(ord.length * q))];
 }
 
 /**
@@ -327,6 +374,11 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
       const emMate = cheios
         .filter((i) => i.matematica)
         .reduce((n, i) => n + i.texto.trim().length, 0);
+      // Mediana, não média: um "1." de marcador ou um respingo de sujeira do
+      // escaneado tem traço próprio e puxaria a média da linha inteira.
+      const traco = mediana(
+        cheios.map((i) => i.traco ?? 0).filter((t) => t > 0),
+      );
 
       return {
         texto,
@@ -334,6 +386,7 @@ function agruparLinhas(itens: Item[], corpo: number, fonteCorpo: string): Linha[
         italico,
         sobrescrito,
         mate: letras ? emMate / letras : 0,
+        traco,
         x: esq,
         dir: Math.max(...cheios.map((i) => i.x + i.w)),
         y: g[0].y,
@@ -405,9 +458,16 @@ function semCabecalho(
 
   const ehMobilia = (i: number) => {
     const l = linhas[i];
-    // Mobília nunca é maior que o texto — isso protege o título curto que abre um
-    // capítulo (ele é a primeira linha da página e seria descartado sem essa trava).
-    if (l.alt > corpo) return false;
+    // Mobília nunca é *bem* maior que o texto — é isso que protege o título curto
+    // que abre um capítulo (ele é a primeira linha da página e seria descartado
+    // sem essa trava). Um tiquinho maior acontece e não quer dizer título: no
+    // livro digitalizado a altura vem da linha que o OCR mediu, e o cabeçalho
+    // corrido sai uns 20~40% acima do corpo sem ser outra coisa que cabeçalho.
+    if (l.alt > corpo * 1.45) return false;
+    // E, acima do corpo, só passa a linha escrita na fonte do texto: título de
+    // verdade troca de fonte, e é isso que separa ele do cabeçalho corrido que o
+    // OCR mediu um pouco mais alto que as linhas do miolo.
+    if (l.alt > corpo && l.soOutraFonte) return false;
     const curta = l.dir - l.x < largura * 0.35;
     const soNumero = /^[\divxlcdm]+$/i.test(l.texto.replace(/[\s.\-—|]/g, ""));
     // "38 | Capítulo 2" ou "Capítulo 2 | 38"
@@ -427,10 +487,26 @@ function semCabecalho(
     // Carimbo de gráfica ("...Emendas Finais.indd 19 04/07/2011 16:02:23") fica fora
     // da caixa de texto, à esquerda de onde qualquer conteúdo real começa.
     const foraDaColuna = l.x < esquerda - corpo;
-    if (!curta && !soNumero && !numerada && !comFolio && !foraDaColuna) return false;
+    // Título corrido sem número nenhum na ponta — ou com ele, mas sem a barra que
+    // o OCR do livro digitalizado costuma comer ("4 Cracking the Coding Interview,
+    // 6th Edition", "Chapter 1 | Arrays and Strings"). Não é frase: cabe em pouco
+    // mais de meia linha, tem poucas palavras e não termina em pontuação de fim.
+    const titulete =
+      l.dir - l.x < largura * 0.6 &&
+      palavras(l.texto) <= 8 &&
+      !/[.!?;:]$/.test(l.texto.trim());
+
+    const desenho = curta || soNumero || numerada || comFolio || foraDaColuna;
+    if (!desenho && !titulete) return false;
 
     const vizinho = i === 0 ? linhas[1] : linhas[i - 1];
-    return Math.abs(l.y - vizinho.y) > vaoTipico * 1.6;
+    const branco = Math.abs(l.y - vizinho.y);
+    // O desenho de mobília (número, barra, fora da coluna) já é sinal forte.
+    // Quando o que se tem é só um titulete, o branco em volta precisa ser bem
+    // maior: é ele que separa a mobília de um parágrafo de uma linha só no pé
+    // da página.
+    const fator = desenho ? 1.6 : 2.2;
+    return branco > vaoTipico * fator;
   };
 
   const fora = new Set<number>();
@@ -478,7 +554,18 @@ export function folioDaLinha(l: Linha): string | null {
     if (/^\d{1,4}$/.test(cs[0].texto) && cs[1].x - cs[0].dir > folga) return cs[0].texto;
   }
 
+  // Nem separador nem vão: o número sozinho numa ponta do titulete. É o caso do
+  // livro digitalizado, onde o OCR come a barra ("4 | Cracking..." vira "4
+  // Cracking...") e junta o resto numa tira só de texto, sem célula pra medir.
+  const naBorda = texto.match(/^(\d{1,4})\s+\D/) ?? texto.match(/\D\s+(\d{1,4})$/);
+  if (naBorda) return naBorda[1];
+
   return null;
+}
+
+/** Quantas palavras a linha tem — pontuação e barra solta não contam. */
+function palavras(texto: string): number {
+  return (texto.match(/[\p{L}\p{N}]+/gu) ?? []).length;
 }
 
 /**
@@ -488,7 +575,8 @@ export function folioDaLinha(l: Linha): string | null {
  * pouco maior que o corpo (aqui, 13.65 contra 12.40 — só 10% a mais), então
  * exigir "bem maior" deixava passar direto. O nível sai da proporção.
  */
-function classificar(l: Linha, corpo: number, esquerda: number, largura: number): Classe {
+function classificar(l: Linha, regua: Regua): Classe {
+  const { corpo, esquerda, largura } = regua;
   const proporcao = l.alt / corpo;
 
   // Linha inteira em fonte monoespaçada é código. Trecho solto de `código` no meio
@@ -500,7 +588,35 @@ function classificar(l: Linha, corpo: number, esquerda: number, largura: number)
   if (pareceFormula(l, esquerda, largura)) return { tipo: "formula" };
 
   if (l.soOutraFonte && proporcao >= 1.05) {
-    const nivel = proporcao >= 1.7 ? 1 : proporcao >= 1.28 ? 2 : 3;
+    return { tipo: "titulo", nivel: nivelDoTitulo(proporcao) };
+  }
+
+  // Nenhum título encosta na margem direita: o que enche a linha até o fim é
+  // texto. É esta trava que segura os dois sinais abaixo, que fora dela pegariam
+  // parágrafo com entrada em negrito. A régua é a margem, não a largura típica
+  // da linha — numa página de código a linha típica é curta, e medir por ela
+  // faria todo título passar por "linha cheia".
+  const naLinhaCheia = l.dir > regua.direita - corpo;
+
+  const nivel = nivelDoTitulo(Math.max(proporcao, 1.05));
+  // Título sem palavra nenhuma só existe grande e curto: é o algarismo que abre
+  // o capítulo ("6", "IV"). Do tamanho do texto, o que parece isso é número de
+  // linha de código e rótulo de diagrama; comprido, é a tripa de símbolos que
+  // sobra de uma tabela escaneada. Nenhum dos dois é título de coisa alguma.
+  const semPalavra = !/\p{L}{2}/u.test(l.texto);
+  const podeSerTitulo =
+    !naLinhaCheia && (!semPalavra || (nivel === 1 && l.texto.trim().length <= 4));
+
+  // A seta que o livro usa pra abrir seção ("► Why?"). Vale como título porque
+  // este caractere, nesta página, só aparece abrindo linha — nunca no meio de
+  // uma frase. Veja `marcadoresDeSecao`.
+  if (podeSerTitulo && regua.marcadores.has(l.texto.trim()[0])) {
+    return { tipo: "titulo", nivel };
+  }
+
+  // Negrito medido na folha: o título do livro digitalizado, que não tem fonte
+  // própria pra denunciar ele. Ver `pdf-tinta.ts`.
+  if (podeSerTitulo && regua.traco > 0 && l.traco >= regua.traco * PESO_TITULO) {
     return { tipo: "titulo", nivel };
   }
 
@@ -510,6 +626,58 @@ function classificar(l: Linha, corpo: number, esquerda: number, largura: number)
   }
 
   return { tipo: "paragrafo" };
+}
+
+/** As medidas da coluna que a classificação usa como régua. */
+type Regua = {
+  /** Altura da letra do texto comum. */
+  corpo: number;
+  /** Margem esquerda e direita da coluna, em pt. */
+  esquerda: number;
+  direita: number;
+  /** Largura típica da linha — serve pra saber o que está centrado. */
+  largura: number;
+  /** Peso do traço do texto comum; 0 quando ninguém mediu. */
+  traco: number;
+  /** Setas que, nesta coluna, abrem seção. Veja `marcadoresDeSecao`. */
+  marcadores: Set<string>;
+};
+
+/** Quanto o traço precisa engordar em relação ao corpo pra linha virar título. */
+const PESO_TITULO = 1.25;
+
+/** Setas que livro usa pra abrir seção. Bala de lista ("•") não entra: é item. */
+const SETA = /[►▶➤▸❯→➔]/;
+
+function nivelDoTitulo(proporcao: number): 1 | 2 | 3 {
+  return proporcao >= 1.7 ? 1 : proporcao >= 1.28 ? 2 : 3;
+}
+
+/**
+ * Que setas, nesta página, são marcador de seção.
+ *
+ * O livro escolhe um caractere e usa ele pra abrir toda seção — "► Why?",
+ * "► StringBuilder". É estrutura de graça, e sobrevive ao escaneado: o OCR
+ * reconhece o desenho da seta mesmo sem saber que fonte é aquela.
+ *
+ * O que separa marcador de enfeite é o lugar: marcador **só** abre linha. Uma
+ * seta que aparece no meio de uma frase ("a → b") é texto, e aí aquele caractere
+ * inteiro fica de fora — melhor perder o título que rachar um parágrafo no meio.
+ */
+function marcadoresDeSecao(linhas: Linha[]): Set<string> {
+  const abrindo = new Set<string>();
+  const nomeio = new Set<string>();
+
+  for (const l of linhas) {
+    const texto = l.texto.trim();
+    if (!texto) continue;
+    const primeiro = texto[0];
+    if (SETA.test(primeiro)) abrindo.add(primeiro);
+    for (const c of texto.slice(1)) if (SETA.test(c)) nomeio.add(c);
+  }
+
+  for (const c of nomeio) abrindo.delete(c);
+  return abrindo;
 }
 
 /**
@@ -769,17 +937,75 @@ function marcarNotas(linhas: Linha[], classes: Classe[], corpo: number): void {
   for (let i = inicio; i < linhas.length; i++) classes[i] = { tipo: "nota" };
 }
 
+/**
+ * Linha que só continua a de cima não muda de classe.
+ *
+ * O recuo pendurado do item de lista ("• Analytical skills:" na margem e o resto
+ * do item recuado embaixo) tem exatamente o desenho de uma citação: recuado e,
+ * num livro digitalizado, com a altura que o OCR mede variando alguns por cento
+ * de uma linha pra outra — o bastante pra cair no corte de "corpo menor".
+ *
+ * O mesmo vale pro título achado pelo peso do traço: o fim curto de um parágrafo,
+ * numa página em que o corpo do texto é código miúdo, sobe acima do corte de
+ * negrito sem ser título nenhum.
+ *
+ * O que desmente os dois é a linha de cima: ela vai até a margem direita e o
+ * branco até aqui é o de dentro do parágrafo. Frase que não acabou não começa
+ * nem citação nem título.
+ */
+function corrigirContinuacoes(
+  linhas: Linha[],
+  classes: Classe[],
+  corpo: number,
+  esquerda: number,
+): void {
+  const direita = Math.max(...linhas.map((l) => l.dir));
+
+  for (let i = 1; i < linhas.length; i++) {
+    if (classes[i].tipo !== "citacao" && classes[i].tipo !== "titulo") continue;
+    const ant = linhas[i - 1];
+    const l = linhas[i];
+    // De margem a margem: a linha que só encosta numa das duas não é frase
+    // atravessando — é a remissão alinhada à direita ("pgl24"), e o que vem
+    // depois dela começa mesmo bloco novo.
+    const cheia = ant.x <= esquerda + corpo * 1.5 && ant.dir > direita - corpo * 2;
+    const colada = ant.y - l.y <= Math.max(ant.alt, l.alt) * 1.5;
+    if (cheia && colada) classes[i] = classes[i - 1];
+  }
+}
+
 function mesmaClasse(a: Classe, b: Classe): boolean {
   if (a.tipo !== b.tipo) return false;
   return a.tipo === "titulo" && b.tipo === "titulo" ? a.nivel === b.nivel : true;
 }
 
 /** Linhas → blocos. Quebra por espaçamento, recuo, ponto final ou mudança de classe. */
-function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
+function juntarParagrafos(
+  linhas: Linha[],
+  corpo: number,
+  tracoCorpo = 0,
+): BlocoPosicionado[] {
   if (!linhas.length) return [];
   const esquerda = mediana(linhas.map((l) => l.x));
   const largura = mediana(linhas.map((l) => l.dir - l.x));
-  const classes = linhas.map((l) => classificar(l, corpo, esquerda, largura));
+  const regua: Regua = {
+    corpo,
+    esquerda,
+    // Margem direita da coluna. Percentil, não máximo: uma tabela larga ou um
+    // desenho que passe da caixa de texto puxaria o máximo pra fora, e aí
+    // nenhuma linha de prosa contaria como cheia.
+    direita: percentil(
+      linhas.map((l) => l.dir),
+      0.9,
+    ),
+    largura,
+    traco: tracoCorpo,
+    marcadores: marcadoresDeSecao(linhas),
+  };
+  const classes = linhas.map((l) => classificar(l, regua));
+  // Logo depois de classificar: desfaz a citação que na verdade era o meio de um
+  // parágrafo, antes que tabela, sumário e nota decidam em cima dela.
+  corrigirContinuacoes(linhas, classes, corpo, esquerda);
   // Antes da tabela: entrada de sumário também quebra em duas colunas, e sem
   // isto a página inteira de sumário viraria uma tabela de duas colunas.
   marcarSumario(linhas, classes);
@@ -856,6 +1082,11 @@ function juntarParagrafos(linhas: Linha[], corpo: number): BlocoPosicionado[] {
 
 /** Hífen no fim da linha: comum (-), tipográfico (‐ ‑) ou opcional (­). */
 const HIFEN_FINAL = /[A-Za-zÀ-ÿ]([-‐‑­])$/;
+
+/** A seta que abre a seção é desenho, não palavra — sai do texto do título. */
+function semMarcador(texto: string): string {
+  return SETA.test(texto.trim()[0] ?? "") ? texto.trim().slice(1).trimStart() : texto;
+}
 
 function montar(linhas: Linha[], classe: Classe): Bloco {
   // Código mantém a quebra de linha e o recuo — é o que dá sentido ao aninhamento.
@@ -947,7 +1178,9 @@ function montar(linhas: Linha[], classe: Classe): Bloco {
   }
 
   // Título já é destacado por inteiro; marcar de novo por dentro seria redundante.
-  if (classe.tipo === "titulo") return { tipo: "titulo", nivel: classe.nivel, texto };
+  if (classe.tipo === "titulo") {
+    return { tipo: "titulo", nivel: classe.nivel, texto: semMarcador(texto) };
+  }
 
   // O PDF guarda o endereço como texto comum; quem transforma em link é a leitura
   // do próprio texto. (No EPUB o <a href> vem escrito, e é ele que vale.)
