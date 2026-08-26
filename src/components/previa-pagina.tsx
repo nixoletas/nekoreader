@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { obterPdfOffline, obterPrevia, salvarPrevia } from "@/lib/offline-db";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import type { Book } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/cliente";
 
 /** Largura do desenho, em pixel. Cabe no cartão em tela retina sem pesar. */
 const LARGURA = 340;
@@ -33,6 +34,7 @@ export default function PreviaPagina({
   capaUrl: string | null;
   className?: string;
 }) {
+  const { d, t } = useI18n();
   const [imagem, setImagem] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export default function PreviaPagina({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imagem}
-        alt={`Página ${book.last_page}`}
+        alt={t(d.original.dialog, { label: book.last_page })}
         className={`h-full w-full bg-white object-cover object-top ${className}`}
       />
     );

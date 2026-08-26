@@ -1,13 +1,13 @@
 import AuthShell from "@/components/auth-shell";
-import NovaSenhaForm from "./nova-senha-form";
+import { i18nAtual } from "@/lib/i18n/servidor";
+import NewPasswordForm from "./new-password-form";
 
-export default function NovaSenhaPage() {
+export default async function NewPasswordPage() {
+  const { d } = await i18nAtual();
+
   return (
-    <AuthShell
-      titulo="Nova senha"
-      subtitulo="Escolha uma senha e confirme para não errar."
-    >
-      <NovaSenhaForm />
+    <AuthShell titulo={d.auth.newPassword.title} subtitulo={d.auth.newPassword.subtitle}>
+      <NewPasswordForm />
     </AuthShell>
   );
 }

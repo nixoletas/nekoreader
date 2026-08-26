@@ -12,8 +12,11 @@
  * reconhecível por quem lê, não exato.
  */
 
-const CHAVE_ID = "marginalia:dispositivo";
-const CHAVE_NOME = "marginalia:dispositivo-nome";
+import type { Dicionario } from "@/lib/i18n/dicionarios";
+import { fmt } from "@/lib/i18n/formato";
+
+const CHAVE_ID = "neko:device";
+const CHAVE_NOME = "neko:device-name";
 
 /** Id deste aparelho, criado na primeira vez e guardado depois. */
 export function idDoDispositivo(): string {
@@ -32,8 +35,12 @@ export function idDoDispositivo(): string {
 
 /**
  * Nome legível deste aparelho — o que a pessoa deu, ou o deduzido do navegador.
+ *
+ * O nome deduzido é montado no idioma em vigor ("Chrome on Windows", "Chrome no
+ * Windows"), então quem chama precisa passar o dicionário. O nome escolhido à
+ * mão passa direto: ele é da pessoa, não nosso pra traduzir.
  */
-export function nomeDoDispositivo(): string {
+export function nomeDoDispositivo(d: Dicionario): string {
   if (typeof localStorage !== "undefined") {
     try {
       const escolhido = localStorage.getItem(CHAVE_NOME);
@@ -42,7 +49,7 @@ export function nomeDoDispositivo(): string {
       // segue com o nome deduzido
     }
   }
-  return nomeDeduzido();
+  return nomeDeduzido(d);
 }
 
 /** Deixa a pessoa renomear o aparelho ("iPhone da Ana"). */
@@ -60,14 +67,14 @@ export function definirNomeDoDispositivo(nome: string): void {
  * "Chrome no Windows", "Safari no iPhone" — aparelho primeiro quando ele é o que
  * a pessoa reconhece (celular/tablet), navegador quando é computador.
  */
-function nomeDeduzido(): string {
-  if (typeof navigator === "undefined") return "Aparelho";
+function nomeDeduzido(d: Dicionario): string {
+  if (typeof navigator === "undefined") return d.device.unknown;
   const ua = navigator.userAgent;
 
   const aparelho =
     /iPhone/i.test(ua) ? "iPhone"
     : /iPad/i.test(ua) ? "iPad"
-    : /Android/i.test(ua) ? (/Mobile/i.test(ua) ? "Android" : "tablet Android")
+    : /Android/i.test(ua) ? (/Mobile/i.test(ua) ? "Android" : d.device.androidTablet)
     : /Windows/i.test(ua) ? "Windows"
     : /Macintosh|Mac OS X/i.test(ua) ? "Mac"
     : /CrOS/i.test(ua) ? "Chromebook"
@@ -85,7 +92,7 @@ function nomeDeduzido(): string {
     : /Safari\//i.test(ua) ? "Safari"
     : null;
 
-  if (!aparelho) return navegador ?? "Aparelho";
+  if (!aparelho) return navegador ?? d.device.unknown;
   if (!navegador) return aparelho;
-  return `${navegador} no ${aparelho}`;
+  return fmt(d.device.on, { browser: navegador, device: aparelho });
 }

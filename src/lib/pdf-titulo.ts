@@ -30,7 +30,11 @@ const PAGINAS_DE_CAPA = 3;
 
 export async function titulosDoPdf(
   doc: PDFDocumentProxy,
-  { comOcr = false, sinal }: { comOcr?: boolean; sinal?: AbortSignal } = {},
+  {
+    comOcr = false,
+    sinal,
+    idiomas,
+  }: { comOcr?: boolean; sinal?: AbortSignal; idiomas?: string } = {},
 ): Promise<TituloAchado> {
   const dosMetadados = await metadadosDoPdf(doc);
   if (dosMetadados.titulo) return dosMetadados;
@@ -50,7 +54,7 @@ export async function titulosDoPdf(
     const { remontarPorOcr } = await import("@/lib/pdf-ocr");
     for (let pagina = 1; pagina <= Math.min(2, doc.numPages); pagina++) {
       if (sinal?.aborted) return VAZIO;
-      const { colunas } = await remontarPorOcr(doc, pagina, { sinal });
+      const { colunas } = await remontarPorOcr(doc, pagina, { sinal, idiomas });
       const linhas = colunas.flat().map((p) => p.bloco);
       const texto = linhas
         .map((b) => ("texto" in b ? b.texto : ""))

@@ -1,4 +1,5 @@
 import type { Rotulos } from "@/lib/pdf-rotulos";
+import type { Dicionario } from "@/lib/i18n/dicionarios";
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -25,12 +26,15 @@ export const HIGHLIGHT_FILL: Record<HighlightColor, string> = {
   pink: "rgba(226, 130, 168, 0.24)",
 };
 
-export const HIGHLIGHT_LABEL: Record<HighlightColor, string> = {
-  yellow: "Âmbar",
-  green: "Verde",
-  blue: "Azul",
-  pink: "Rosa",
-};
+/**
+ * Como cada cor se chama, no idioma em vigor.
+ *
+ * O nome mora no dicionário e não aqui porque ele é texto de tela ("Marcar em
+ * âmbar"); o que mora aqui é a cor, que não muda de idioma.
+ */
+export function rotuloDaCor(d: Dicionario, c: string): string {
+  return (d.highlight.colors as Record<string, string>)[c] ?? d.highlight.colors.yellow;
+}
 
 export function fill(c: string): string {
   return HIGHLIGHT_FILL[c as HighlightColor] ?? HIGHLIGHT_FILL.yellow;

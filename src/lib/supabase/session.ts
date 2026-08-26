@@ -1,7 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/esqueci", "/auth", "/icons", "/manifest"];
+/**
+ * Rotas que existem antes da conta.
+ *
+ * `/` é a landing: quem chega pelo endereço do site precisa ver a propaganda,
+ * não um formulário de senha. `/new-password` fica **fora** desta lista de
+ * propósito — quem chega lá vem do link do e-mail, e o `/auth/callback` já
+ * trocou o código por uma sessão antes de mandar pra tela.
+ */
+const PUBLIC_PATHS = ["/login", "/forgot", "/auth", "/icons", "/manifest"];
+
+/** Onde a leitura de verdade começa, depois que a pessoa entra. */
+const DEPOIS_DE_ENTRAR = "/library";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -37,7 +48,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const ehLanding = pathname === "/";
+  const isPublic = ehLanding || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -46,9 +58,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === "/login") {
+  // Quem já tem conta não precisa da propaganda nem do formulário: a landing e
+  // o login viram um atalho pra estante.
+  if (user && (ehLanding || pathname === "/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = DEPOIS_DE_ENTRAR;
     url.search = "";
     return NextResponse.redirect(url);
   }

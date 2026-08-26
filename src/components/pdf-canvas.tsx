@@ -8,13 +8,14 @@ import { useSwipe } from "@/lib/swipe";
 import Balao from "@/components/balao";
 import { BarraProgresso } from "@/components/ui";
 import {
-  HIGHLIGHT_LABEL,
+  rotuloDaCor,
   fill,
   swatch,
   type Highlight,
   type HighlightColor,
   type Rect,
 } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/cliente";
 
 type Pending = { rects: Rect[]; text: string };
 
@@ -43,6 +44,7 @@ export default function PdfCanvas({
   onDeleteHighlight: (id: string) => Promise<void>;
   onSwipe: (dir: 1 | -1) => void;
 }) {
+  const { d, t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -144,10 +146,10 @@ export default function PdfCanvas({
           setProgresso(null);
           setErro(e.message);
         }}
-        loading={<Esqueleto texto="Abrindo o livro" progresso={progresso} />}
+        loading={<Esqueleto texto={d.text.openingBook} progresso={progresso} />}
         error={
           <div className="py-24 text-center text-sm text-red-500">
-            {erro ?? "Não consegui abrir esse PDF."}
+            {erro ?? d.text.canvasFailed}
           </div>
         }
         className="flex justify-center"
@@ -193,7 +195,7 @@ export default function PdfCanvas({
                 <button
                   key={c}
                   onClick={() => void salvar(c)}
-                  aria-label={`Marcar em ${HIGHLIGHT_LABEL[c].toLowerCase()}`}
+                  aria-label={t(d.highlight.markIn, { color: rotuloDaCor(d, c) })}
                   className="h-10 w-10 rounded-full border-2 border-white/25 transition active:scale-90"
                   style={{ background: swatch(c) }}
                 />
@@ -204,7 +206,7 @@ export default function PdfCanvas({
                   setPending(null);
                   window.getSelection()?.removeAllRanges();
                 }}
-                aria-label="Cancelar"
+                aria-label={d.common.cancel}
                 className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition active:scale-90"
               >
                 <X className="h-4 w-4" aria-hidden />

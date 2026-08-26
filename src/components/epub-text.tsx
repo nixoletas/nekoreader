@@ -5,6 +5,8 @@ import { CachePaginas } from "@/lib/pdf-cache";
 import { abrirEpubDaUrl, blocosDoEpub } from "@/lib/epub-doc";
 import type { Bloco } from "@/lib/pdf-blocos";
 import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
+import { useI18n } from "@/lib/i18n/cliente";
+import { textoDoErro } from "@/lib/erros";
 import type { Highlight, HighlightColor, TextSpan } from "@/lib/types";
 
 /**
@@ -40,6 +42,7 @@ export default function EpubText({
   onDeleteHighlight: (id: string) => Promise<void>;
   onSwipe: (dir: 1 | -1) => void;
 }) {
+  const { d, t } = useI18n();
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<number | null>(null);
@@ -64,9 +67,13 @@ export default function EpubText({
 
     (async () => {
       try {
-        const epub = await abrirEpubDaUrl(fileUrl, (fracao) => {
-          if (vivo) setProgresso(Math.round(fracao * 100));
-        });
+        const epub = await abrirEpubDaUrl(
+          fileUrl,
+          (fracao) => {
+            if (vivo) setProgresso(Math.round(fracao * 100));
+          },
+          (n) => t(d.unit.chapterN, { n }),
+        );
         if (!vivo) return;
         setProgresso(null);
         onLoadSuccess(epub.capitulos.length);
@@ -81,14 +88,14 @@ export default function EpubText({
         cache.definir(chave, extraidos);
         setBlocos(extraidos);
       } catch (e) {
-        if (vivo) setErro(e instanceof Error ? e.message : "Falhou ao ler o EPUB.");
+        if (vivo) setErro(textoDoErro(d, e));
       }
     })();
 
     return () => {
       vivo = false;
     };
-  }, [fileUrl, pageNumber, onLoadSuccess, cache]);
+  }, [fileUrl, pageNumber, onLoadSuccess, cache, d, t]);
 
   return (
     <LeitorTexto
@@ -101,7 +108,7 @@ export default function EpubText({
       onAddHighlight={onAddHighlight}
       onDeleteHighlight={onDeleteHighlight}
       onSwipe={onSwipe}
-      textoSemConteudo="Este capítulo está vazio — deve ser só uma folha de rosto ou uma página de imagem."
+      textoSemConteudo={d.text.emptyChapter}
     />
   );
 }

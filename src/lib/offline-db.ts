@@ -12,7 +12,7 @@ import type { Bloco } from "@/lib/pdf-blocos";
  * (progresso, marcações) feitas offline, esperando pra sincronizar.
  */
 
-const DB_NOME = "marginalia-offline";
+const DB_NOME = "nekoreader-offline";
 const DB_VERSAO = 6;
 const LOJA_PDFS = "pdfs";
 const LOJA_FILA = "fila";
@@ -22,6 +22,33 @@ const LOJA_SUMARIOS = "sumarios";
 const LOJA_ROTULOS = "rotulos";
 const LOJA_OCR = "ocr";
 const LOJA_PREVIAS = "previas";
+
+/**
+ * O que o app deixou nos aparelhos quando ainda se chamava Marginália.
+ *
+ * O banco antigo pode guardar livros inteiros — centenas de MB que nunca mais
+ * serão lidos, porque a chave mudou junto com o nome. Apagar é a única saída
+ * decente: sem isso o espaço fica ocupado e ninguém sabe por quê.
+ *
+ * Só os livros baixados se perdem, e eles voltam num toque; a estante, as
+ * marcações e o progresso moram no servidor.
+ */
+const DB_ANTIGO = "marginalia-offline";
+const PREFIXO_ANTIGO = "marginalia:";
+
+export function limparRastroAntigo(): void {
+  try {
+    indexedDB.deleteDatabase(DB_ANTIGO);
+  } catch {
+    // navegador sem IndexedDB, ou banco travado por outra aba: fica pra próxima
+  }
+  try {
+    const velhas = Object.keys(localStorage).filter((k) => k.startsWith(PREFIXO_ANTIGO));
+    for (const chave of velhas) localStorage.removeItem(chave);
+  } catch {
+    // localStorage bloqueado — as chaves antigas são bytes, não atrapalham nada
+  }
+}
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 

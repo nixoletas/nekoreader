@@ -5,6 +5,8 @@ import { Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { inspecionarPdf } from "@/lib/pdf";
 import { Aviso } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/cliente";
+import { textoDoErro } from "@/lib/erros";
 
 /** `null` = arquivo que não sei ler. */
 function formatoDe(f: File): "pdf" | "epub" | null {
@@ -15,6 +17,7 @@ function formatoDe(f: File): "pdf" | "epub" | null {
 }
 
 export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
+  const { d, t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
   async function enviar(files: FileList | File[]) {
     const lista = Array.from(files).filter((f) => formatoDe(f) !== null);
     if (!lista.length) {
-      setError("Aceito arquivo PDF ou EPUB.");
+      setError(d.upload.onlyPdfEpub);
       return;
     }
 
@@ -33,7 +36,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Sessão expirada. Entre de novo.");
+      setError(d.upload.sessionExpired);
       return;
     }
 
@@ -41,7 +44,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
       const rotulo = lista.length > 1 ? `(${i + 1}/${lista.length}) ` : "";
       const formato = formatoDe(file)!;
       try {
-        setStatus(`${rotulo}Lendo ${file.name}`);
+        setStatus(rotulo + t(d.upload.reading, { file: file.name }));
         // O leitor de EPUB (com o zip junto) só é baixado quando alguém manda um —
         // quem só usa PDF não carrega essa parte à toa.
         const lido =
@@ -53,7 +56,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
         const arquivoPath = `${user.id}/${id}.${formato}`;
         const tipoMime = formato === "epub" ? "application/epub+zip" : "application/pdf";
 
-        setStatus(`${rotulo}Guardando na estante`);
+        setStatus(rotulo + d.upload.storing);
         const up = await supabase.storage
           .from("books")
           .upload(arquivoPath, file, { contentType: tipoMime });
@@ -87,7 +90,7 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
           throw ins.error;
         }
       } catch (e) {
-        setError(`Falhou em ${file.name}: ${(e as Error).message}`);
+        setError(t(d.upload.failed, { file: file.name, message: textoDoErro(d, e) }));
         setStatus(null);
         return;
       }
@@ -142,10 +145,10 @@ export default function Uploader({ onUploaded }: { onUploaded: () => void }) {
           <p className="text-[15px] font-medium">{status}…</p>
         ) : (
           <>
-            <p className="display text-lg">Adicionar livro</p>
+            <p className="display text-lg">{d.upload.add}</p>
             <p className="mt-0.5 text-sm text-muted">
-              <span className="hidden sm:inline">Arraste um PDF ou EPUB aqui ou </span>
-              toque para escolher
+              <span className="hidden sm:inline">{d.upload.dragHint}</span>
+              {d.upload.tapHint}
             </p>
           </>
         )}

@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Aviso, Botao, Campo } from "@/components/ui";
+import { useT } from "@/lib/i18n/cliente";
 
-export default function NovaSenhaForm() {
+export default function NewPasswordForm() {
   const router = useRouter();
+  const d = useT();
   const [senha, setSenha] = useState("");
   const [senha2, setSenha2] = useState("");
   const [busy, setBusy] = useState(false);
@@ -19,8 +21,8 @@ export default function NovaSenhaForm() {
     e.preventDefault();
     setErro(null);
 
-    if (senha.length < 6) return setErro("A senha precisa de 6 caracteres ou mais.");
-    if (senha !== senha2) return setErro("As senhas não são iguais.");
+    if (senha.length < 6) return setErro(d.auth.login.tooShort);
+    if (senha !== senha2) return setErro(d.auth.login.mismatch);
 
     setBusy(true);
     const supabase = createClient();
@@ -29,7 +31,7 @@ export default function NovaSenhaForm() {
     if (error) {
       setErro(
         error.message.toLowerCase().includes("session")
-          ? "O link expirou. Peça outro em “Esqueci a senha”."
+          ? d.auth.newPassword.expired
           : error.message,
       );
       setBusy(false);
@@ -39,7 +41,7 @@ export default function NovaSenhaForm() {
     setOk(true);
     setBusy(false);
     setTimeout(() => {
-      router.replace("/");
+      router.replace("/library");
       router.refresh();
     }, 1200);
   }
@@ -47,40 +49,40 @@ export default function NovaSenhaForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <Campo
-        label="Nova senha"
+        label={d.auth.newPassword.password}
         type="password"
         required
         minLength={6}
         autoComplete="new-password"
         value={senha}
         onChange={(e) => setSenha(e.target.value)}
-        placeholder="no mínimo 6 caracteres"
+        placeholder={d.auth.login.passwordNew}
       />
 
       <div>
         <Campo
-          label="Confirmar nova senha"
+          label={d.auth.newPassword.confirm}
           type="password"
           required
           minLength={6}
           autoComplete="new-password"
           value={senha2}
           onChange={(e) => setSenha2(e.target.value)}
-          placeholder="repita a senha"
+          placeholder={d.auth.login.confirmPlaceholder}
           aria-invalid={diferem}
         />
         {diferem && (
           <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-            As senhas não são iguais.
+            {d.auth.login.mismatch}
           </p>
         )}
       </div>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
-      {ok && <Aviso tipo="ok">Senha trocada. Abrindo sua estante...</Aviso>}
+      {ok && <Aviso tipo="ok">{d.auth.newPassword.ok}</Aviso>}
 
       <Botao type="submit" disabled={busy || ok || diferem} className="w-full">
-        {busy ? "Salvando..." : "Salvar nova senha"}
+        {busy ? d.common.saving : d.auth.newPassword.submit}
       </Botao>
     </form>
   );

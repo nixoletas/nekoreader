@@ -2,6 +2,7 @@
 
 import { abrirEpub, analisadorDoNavegador } from "@/lib/epub";
 import type { Inspecao } from "@/lib/types";
+import { ERRO, ErroApp } from "@/lib/erros";
 
 const LADO_MAX = 480;
 
@@ -15,7 +16,7 @@ const LADO_MAX = 480;
 export async function inspecionarEpub(file: File): Promise<Inspecao> {
   const epub = await abrirEpub(await file.arrayBuffer(), analisadorDoNavegador());
   if (!epub.capitulos.length) {
-    throw new Error("Este EPUB não declara nenhum capítulo pra ler.");
+    throw new ErroApp(ERRO.epubSemCapitulos);
   }
 
   let cover: Blob | null = null;

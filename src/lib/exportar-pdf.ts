@@ -89,7 +89,9 @@ function nomeDeArquivo(titulo: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 80);
-  return limpo || "livro";
+  // Sem nada aproveitável no título (livro só em japonês, por exemplo), sobra um
+  // nome neutro — é nome de arquivo, não texto de tela.
+  return limpo || "book";
 }
 
 /** Entrega o arquivo pro navegador salvar. */

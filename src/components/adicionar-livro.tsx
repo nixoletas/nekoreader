@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import Uploader from "@/components/uploader";
+import { useT } from "@/lib/i18n/cliente";
 
 /**
  * O "+" da estante cheia.
@@ -18,6 +19,7 @@ import Uploader from "@/components/uploader";
  * mais rápido de subir um livro no computador.
  */
 export default function AdicionarLivro({ onEnviado }: { onEnviado: () => void }) {
+  const d = useT();
   const [aberto, setAberto] = useState(false);
 
   useEffect(() => {
@@ -45,8 +47,8 @@ export default function AdicionarLivro({ onEnviado }: { onEnviado: () => void })
     <>
       <button
         onClick={() => setAberto(true)}
-        aria-label="Adicionar livro"
-        title="Adicionar livro"
+        aria-label={d.upload.add}
+        title={d.upload.add}
         className="tap !min-h-9 !min-w-9 rounded-full border border-border bg-surface text-muted transition hover:border-accent/50 hover:text-accent"
       >
         <Plus className="h-4 w-4" aria-hidden />
@@ -58,14 +60,14 @@ export default function AdicionarLivro({ onEnviado }: { onEnviado: () => void })
           onClick={(e) => e.target === e.currentTarget && setAberto(false)}
           role="dialog"
           aria-modal
-          aria-label="Adicionar livro"
+          aria-label={d.upload.add}
         >
           <div className="sobe w-full max-w-md rounded-t-3xl border border-border bg-surface p-5 shadow-2xl sm:rounded-2xl">
             <div className="mb-4 flex items-center gap-2">
-              <h2 className="display text-lg">Adicionar livro</h2>
+              <h2 className="display text-lg">{d.upload.add}</h2>
               <button
                 onClick={() => setAberto(false)}
-                aria-label="Fechar"
+                aria-label={d.common.close}
                 className="tap ml-auto rounded-lg text-muted transition hover:text-foreground"
               >
                 <X className="h-5 w-5" aria-hidden />

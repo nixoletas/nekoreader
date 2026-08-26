@@ -1,6 +1,7 @@
 "use client";
 
 import type { createClient } from "@/lib/supabase/client";
+import { ERRO, ErroApp } from "@/lib/erros";
 
 type Supabase = ReturnType<typeof createClient>;
 
@@ -11,7 +12,7 @@ const MARGEM_SEGUNDOS = 60 * 20; // renova com 20min de folga, nunca expira no m
 type Cache = { url: string; expiraEm: number };
 
 function chave(storagePath: string) {
-  return `marginalia:pdfurl:${storagePath}`;
+  return `neko:pdfurl:${storagePath}`;
 }
 
 function lerCache(storagePath: string): Cache | null {
@@ -58,7 +59,8 @@ export async function urlAssinadaDoLivro(
     .createSignedUrl(storagePath, TTL_SEGUNDOS);
 
   if (error || !data?.signedUrl) {
-    throw new Error(error?.message ?? "URL não gerada.");
+    if (error?.message) throw new Error(error.message);
+    throw new ErroApp(ERRO.urlNaoGerada);
   }
 
   salvarCache(storagePath, {

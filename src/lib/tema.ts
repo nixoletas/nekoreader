@@ -6,7 +6,7 @@ import { usePreferencia } from "@/lib/prefs";
 export type Tema = "sistema" | "claro" | "escuro";
 export type TemaResolvido = "claro" | "escuro";
 
-export const CHAVE_TEMA = "marginalia:tema";
+export const CHAVE_TEMA = "neko:theme";
 
 /** Cor do papel em cada tema — é ela que a barra do navegador copia. */
 const PAPEL: Record<TemaResolvido, string> = {

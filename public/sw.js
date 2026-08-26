@@ -2,8 +2,8 @@
 // pra abrir o app do zero sem internet (livro baixado continua lendo offline).
 // O casco nunca leva dado de sessão — as páginas buscam tudo no cliente agora.
 
-const CACHE = "marginalia-v2";
-const CACHE_CASCO = "marginalia-casco-v1";
+const CACHE = "nekoreader-v1";
+const CACHE_CASCO = "nekoreader-casco-v1";
 
 const ESTATICOS = [
   "/pdf.worker.min.mjs",
@@ -12,11 +12,12 @@ const ESTATICOS = [
   "/manifest.webmanifest",
 ];
 
-// Chave sintética (não a URL de fato) — assim TODO /livro/<qualquer-id> reaproveita
+// Chave sintética (não a URL de fato) — assim TODO /book/<qualquer-id> reaproveita
 // o mesmo casco em cache, em vez de só funcionar offline pro último livro visitado.
-const CASCO_ESTANTE = "/";
-const CASCO_LIVRO = "/__casco/livro";
-const CASCO_MARCACOES = "/__casco/marcacoes";
+const CASCO_LANDING = "/";
+const CASCO_ESTANTE = "/__casco/library";
+const CASCO_LIVRO = "/__casco/book";
+const CASCO_MARCACOES = "/__casco/notes";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -56,11 +57,12 @@ function cacheavel(url) {
 
 /** null = rota sem casco offline (login etc.) — passa direto pra rede, sem cache. */
 function chaveDoCasco(pathname) {
-  if (pathname === "/") return CASCO_ESTANTE;
-  if (pathname.startsWith("/livro/")) {
+  if (pathname === "/") return CASCO_LANDING;
+  if (pathname === "/library") return CASCO_ESTANTE;
+  if (pathname.startsWith("/book/")) {
     // Telas diferentes, cascos diferentes: sem isto a página de marcações seria
     // guardada por cima da do leitor e voltaria no lugar dela offline.
-    return pathname.endsWith("/marcacoes") ? CASCO_MARCACOES : CASCO_LIVRO;
+    return pathname.endsWith("/notes") ? CASCO_MARCACOES : CASCO_LIVRO;
   }
   return null;
 }

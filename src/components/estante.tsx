@@ -12,6 +12,10 @@ import { useOnline } from "@/lib/use-offline";
 import { useRotulos } from "@/lib/use-rotulos";
 import { rotuloDaPagina } from "@/lib/pdf-rotulos";
 import { haQuantoTempo } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/cliente";
+import type { Dicionario } from "@/lib/i18n/dicionarios";
+import type { Locale } from "@/lib/i18n/config";
+import SeletorIdioma from "@/components/seletor-idioma";
 import { idDoDispositivo } from "@/lib/dispositivo";
 import PreviaPagina from "@/components/previa-pagina";
 import type { PosicaoDispositivo } from "@/lib/types";
@@ -42,13 +46,20 @@ const AdicionarLivro = dynamic(() => import("@/components/adicionar-livro"), {
  * livro ainda não aberto aqui mostra a página do arquivo, como antes.
  */
 function PosicaoDoLivro({ book }: { book: Book }) {
+  const { d, t } = useI18n();
   const rotulos = useRotulos(book.id, null, book.format, book.page_labels);
   const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
+  const unidade = book.format === "epub" ? d.unit.chapter : d.unit.page;
 
   return (
     <>
-      {book.format === "epub" ? "capítulo" : "página"} {numero(book.last_page)}
-      {book.total_pages ? ` de ${numero(book.total_pages)}` : ""}
+      {book.total_pages
+        ? t(d.shelf.positionOf, {
+            unit: unidade,
+            current: numero(book.last_page),
+            total: numero(book.total_pages),
+          })
+        : t(d.shelf.position, { unit: unidade, current: numero(book.last_page) })}
     </>
   );
 }
@@ -67,10 +78,14 @@ function OndeParou({
   posicao,
   quando,
   aparelhoId,
+  d,
+  locale,
 }: {
   posicao: PosicaoDispositivo | null;
   quando: string | null;
   aparelhoId: string | null;
+  d: Dicionario;
+  locale: Locale;
 }) {
   const momento = posicao?.updated_at ?? quando;
   if (!momento) return null;
@@ -81,7 +96,7 @@ function OndeParou({
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[13px] text-muted">
       <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      {haQuantoTempo(momento)}
+      {haQuantoTempo(momento, d, locale)}
       {outroAparelho && (
         <>
           <span aria-hidden>·</span>
@@ -95,6 +110,7 @@ function OndeParou({
 
 export default function Estante() {
   const router = useRouter();
+  const { d, p, locale } = useI18n();
   const [supabase] = useState(createClient);
   const online = useOnline();
 
@@ -142,8 +158,8 @@ export default function Estante() {
       if (coverPaths.length) {
         const { data } = await supabase.storage.from("books").createSignedUrls(coverPaths, 60 * 60);
         const mapa = new Map<string, string>();
-        data?.forEach((d) => {
-          if (d.path && d.signedUrl) mapa.set(d.path, d.signedUrl);
+        data?.forEach((assinada) => {
+          if (assinada.path && assinada.signedUrl) mapa.set(assinada.path, assinada.signedUrl);
         });
         setCovers(mapa);
       } else {
@@ -157,10 +173,10 @@ export default function Estante() {
         .select("*")
         .order("updated_at", { ascending: false });
       const mapaPosicoes = new Map<string, PosicaoDispositivo>();
-      (pos as PosicaoDispositivo[] | null)?.forEach((p) => {
+      (pos as PosicaoDispositivo[] | null)?.forEach((linha) => {
         // A lista vem da mais recente pra mais antiga: a primeira de cada livro
         // é o aparelho que leu por último.
-        if (!mapaPosicoes.has(p.book_id)) mapaPosicoes.set(p.book_id, p);
+        if (!mapaPosicoes.has(linha.book_id)) mapaPosicoes.set(linha.book_id, linha);
       });
       setPosicoes(mapaPosicoes);
 
@@ -174,7 +190,7 @@ export default function Estante() {
       if (navigator.onLine) {
         // Online mas falhou mesmo assim — não é a hora de mostrar dado velho
         // escondido atrás de "offline": é um erro de verdade, mostra ele.
-        setErro(e instanceof Error ? e.message : "Não consegui carregar a estante.");
+        setErro(e instanceof Error ? e.message : d.shelf.loadFailed);
         return;
       }
       // sem rede — cai pro retrato salvo da última vez
@@ -184,10 +200,10 @@ export default function Estante() {
         setDeDados(true);
         setErro(null);
       } else {
-        setErro("Sem internet e nenhuma estante salva neste aparelho ainda.");
+        setErro(d.shelf.offlineEmpty);
       }
     }
-  }, [supabase, router]);
+  }, [supabase, router, d]);
 
   const primeiraCarga = useRef(true);
   useEffect(() => {
@@ -219,18 +235,19 @@ export default function Estante() {
       <header className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="display text-2xl leading-none sm:text-3xl">
-            Marginália
+            {d.brand.name}
           </h1>
           <p className="mt-1 flex items-center gap-2 truncate text-xs text-muted sm:text-sm">
             {email}
             {deDados && (
               <span className="shrink-0 rounded-full bg-muted/15 px-2 py-0.5 text-[10px] font-medium">
-                offline
+                {d.common.offline}
               </span>
             )}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
+        <SeletorIdioma compacto />
         <BotaoTema />
         <form
           action="/auth/signout"
@@ -245,7 +262,7 @@ export default function Estante() {
           }}
         >
           <button className="tap rounded-xl border border-border bg-surface px-4 text-sm font-medium text-muted transition hover:border-accent/50 hover:text-foreground">
-            Sair
+            {d.shelf.signOut}
           </button>
         </form>
         </div>
@@ -255,7 +272,7 @@ export default function Estante() {
 
       {erro ? (
         <div className="py-14 text-center">
-          <p className="display text-xl">Sem conexão</p>
+          <p className="display text-xl">{d.shelf.noConnection}</p>
           <p className="mx-auto mt-2 max-w-xs text-sm text-muted">{erro}</p>
         </div>
       ) : !books ? (
@@ -273,7 +290,7 @@ export default function Estante() {
           {/* ---------- continuar lendo ---------- */}
           {emLeitura && (
             <Link
-              href={`/livro/${emLeitura.id}`}
+              href={`/book/${emLeitura.id}`}
               className="sobe mb-8 flex items-stretch gap-4 overflow-hidden rounded-3xl border border-border bg-surface p-3 shadow-[var(--shadow)] transition active:scale-[0.99] sm:p-4"
             >
               {/* A prévia é da **página onde parou**, não a capa: é ela que faz
@@ -288,7 +305,7 @@ export default function Estante() {
 
               <div className="flex min-w-0 flex-1 flex-col justify-center">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-accent">
-                  Continuar lendo
+                  {d.shelf.continueReading}
                 </p>
                 <p className="display mt-1 line-clamp-2 text-lg leading-tight sm:text-xl">
                   {emLeitura.title}
@@ -311,6 +328,8 @@ export default function Estante() {
                   posicao={posicoes.get(emLeitura.id) ?? null}
                   quando={emLeitura.last_read_at}
                   aparelhoId={aparelhoId}
+                  d={d}
+                  locale={locale}
                 />
 
                 {!!emLeitura.total_pages && (
@@ -330,7 +349,7 @@ export default function Estante() {
 
               <div className="hidden items-center pr-2 sm:flex">
                 <span className="tap rounded-xl bg-accent px-5 text-sm font-semibold text-white">
-                  Abrir
+                  {d.common.open}
                 </span>
               </div>
             </Link>
@@ -349,18 +368,17 @@ export default function Estante() {
           {/* ---------- estante ---------- */}
           {books.length === 0 ? (
             <div className="py-14 text-center">
-              <p className="display text-xl">Estante vazia</p>
+              <p className="display text-xl">{d.shelf.emptyTitle}</p>
               <p className="mx-auto mt-2 max-w-xs text-sm text-muted">
-                Suba seu primeiro livro ali em cima — PDF ou EPUB. A capa vem do
-                próprio arquivo.
+                {d.shelf.emptyHint}
               </p>
             </div>
           ) : (
             <>
               <h2 className="mb-4 flex items-center gap-2">
-                <span className="display text-lg">Estante</span>
+                <span className="display text-lg">{d.shelf.heading}</span>
                 <span className="text-sm text-muted">
-                  {books.length} {books.length === 1 ? "livro" : "livros"}
+                  {p(d.shelf.count, books.length)}
                 </span>
                 {online && (
                   <span className="ml-auto">

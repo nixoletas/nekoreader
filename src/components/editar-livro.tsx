@@ -5,6 +5,9 @@ import { Sparkles, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import { Botao, Campo } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/cliente";
+import { IDIOMAS_OCR } from "@/lib/i18n/config";
+import { textoDoErro } from "@/lib/erros";
 import type { Book } from "@/lib/types";
 
 /**
@@ -25,6 +28,7 @@ export default function EditarLivro({
   onSalvo: (dados: { title: string; author: string | null }) => void;
   onFechar: () => void;
 }) {
+  const { d, locale } = useI18n();
   const [titulo, setTitulo] = useState(book.title);
   const [autor, setAutor] = useState(book.author ?? "");
   const [salvando, setSalvando] = useState(false);
@@ -65,25 +69,26 @@ export default function EditarLivro({
       const achado = await titulosDoPdf(await abrirDoc(url), {
         comOcr: true,
         sinal: meu.signal,
+        idiomas: IDIOMAS_OCR[locale],
       });
       if (meu.signal.aborted) return;
 
       if (!achado.titulo && !achado.autor) {
-        setAviso("Não achei nada no arquivo — o jeito é escrever à mão.");
+        setAviso(d.edit.nothingFound);
         return;
       }
       if (achado.titulo) setTitulo(achado.titulo);
       if (achado.autor) setAutor(achado.autor);
       setAviso(
         achado.fonte === "metadados"
-          ? "Veio dos dados do arquivo."
+          ? d.edit.fromMetadata
           : achado.fonte === "ocr"
-            ? "Lido da imagem da capa — confira."
-            : "Lido do texto da capa — confira.",
+            ? d.edit.fromCoverImage
+            : d.edit.fromCoverText,
       );
     } catch (e) {
       if (meu.signal.aborted) return;
-      setErro(e instanceof Error ? e.message : "Não consegui ler o arquivo.");
+      setErro(textoDoErro(d, e));
     } finally {
       if (!meu.signal.aborted) setDetectando(false);
     }
@@ -93,7 +98,7 @@ export default function EditarLivro({
     e.preventDefault();
     const novoTitulo = titulo.trim();
     if (!novoTitulo) {
-      setErro("O livro precisa de um nome.");
+      setErro(d.edit.needTitle);
       return;
     }
 
@@ -125,11 +130,11 @@ export default function EditarLivro({
         className="sobe w-full max-w-md rounded-t-3xl border border-border bg-surface p-5 shadow-2xl sm:rounded-2xl"
       >
         <div className="mb-4 flex items-center gap-2">
-          <h2 className="display text-lg">Editar o livro</h2>
+          <h2 className="display text-lg">{d.edit.title}</h2>
           <button
             type="button"
             onClick={onFechar}
-            aria-label="Fechar"
+            aria-label={d.common.close}
             className="tap ml-auto rounded-lg text-muted transition hover:text-foreground"
           >
             <X className="h-5 w-5" aria-hidden />
@@ -138,16 +143,16 @@ export default function EditarLivro({
 
         <div className="space-y-3">
           <Campo
-            label="Título"
+            label={d.edit.bookTitle}
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
             autoFocus
           />
           <Campo
-            label="Autor"
+            label={d.edit.author}
             value={autor}
             onChange={(e) => setAutor(e.target.value)}
-            placeholder="opcional"
+            placeholder={d.edit.authorPlaceholder}
           />
         </div>
 
@@ -159,7 +164,7 @@ export default function EditarLivro({
             className="tap mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 text-sm text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           >
             <Sparkles className="h-4 w-4" aria-hidden />
-            {detectando ? "Lendo o arquivo…" : "Descobrir pelo arquivo"}
+            {detectando ? d.edit.detecting : d.edit.detect}
           </button>
         )}
 
@@ -168,10 +173,10 @@ export default function EditarLivro({
 
         <div className="mt-5 flex gap-2">
           <Botao type="button" variante="contorno" onClick={onFechar} className="flex-1">
-            Cancelar
+            {d.common.cancel}
           </Botao>
           <Botao type="submit" disabled={salvando} className="flex-1">
-            {salvando ? "Salvando…" : "Salvar"}
+            {salvando ? d.common.saving : d.common.save}
           </Botao>
         </div>
       </form>

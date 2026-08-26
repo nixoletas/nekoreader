@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { abrirDoc } from "@/lib/pdf";
 import { Botao } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/cliente";
 
 /** Passo do zoom e limites — o mesmo intervalo do modo página. */
 const PASSO = 0.25;
@@ -33,6 +34,7 @@ export default function ConferirPagina({
   numero: string;
   onFechar: () => void;
 }) {
+  const { d, t } = useI18n();
   const [zoom, setZoom] = useState(1);
   const [erro, setErro] = useState<string | null>(null);
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -83,30 +85,30 @@ export default function ConferirPagina({
   useEffect(() => {
     let vivo = true;
     void desenhar().then((deu) => {
-      if (vivo) setErro(deu ? null : "Não consegui desenhar esta página.");
+      if (vivo) setErro(deu ? null : d.original.failed);
     });
     return () => {
       vivo = false;
     };
-  }, [desenhar]);
+  }, [desenhar, d]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-background/97 backdrop-blur-sm"
       role="dialog"
       aria-modal
-      aria-label={`Página ${numero} original`}
+      aria-label={t(d.original.dialog, { label: numero })}
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <p className="display text-base">Original</p>
-        <span className="text-xs text-muted">página {numero}</span>
+        <p className="display text-base">{d.original.title}</p>
+        <span className="text-xs text-muted">{t(d.original.page, { label: numero })}</span>
 
         <div className="ml-auto flex items-center gap-1">
           <div className="flex items-center rounded-xl border border-border">
             <button
               onClick={() => setZoom((z) => Math.max(MIN, z - PASSO))}
               disabled={zoom <= MIN}
-              aria-label="Diminuir"
+              aria-label={d.common.zoomOut}
               className="tap rounded-l-xl px-2 text-muted transition hover:text-foreground disabled:opacity-40"
             >
               <Minus className="h-4 w-4" aria-hidden />
@@ -117,14 +119,14 @@ export default function ConferirPagina({
             <button
               onClick={() => setZoom((z) => Math.min(MAX, z + PASSO))}
               disabled={zoom >= MAX}
-              aria-label="Aumentar"
+              aria-label={d.common.zoomIn}
               className="tap rounded-r-xl px-2 text-muted transition hover:text-foreground disabled:opacity-40"
             >
               <Plus className="h-4 w-4" aria-hidden />
             </button>
           </div>
 
-          <Botao variante="contorno" onClick={onFechar} aria-label="Fechar">
+          <Botao variante="contorno" onClick={onFechar} aria-label={d.common.close}>
             <X className="h-4 w-4" aria-hidden />
           </Botao>
         </div>

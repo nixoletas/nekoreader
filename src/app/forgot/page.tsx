@@ -1,19 +1,22 @@
 import Link from "next/link";
 import AuthShell from "@/components/auth-shell";
-import EsqueciForm from "./esqueci-form";
+import { i18nAtual } from "@/lib/i18n/servidor";
+import ForgotForm from "./forgot-form";
 
-export default function EsqueciPage() {
+export default async function ForgotPage() {
+  const { d } = await i18nAtual();
+
   return (
     <AuthShell
-      titulo="Esqueci a senha"
-      subtitulo="Mandamos um link pro seu e-mail pra criar uma nova."
+      titulo={d.auth.forgot.title}
+      subtitulo={d.auth.forgot.subtitle}
       rodape={
         <Link href="/login" className="font-medium text-accent hover:underline">
-          ← Voltar para entrar
+          {d.auth.forgot.back}
         </Link>
       }
     >
-      <EsqueciForm />
+      <ForgotForm />
     </AuthShell>
   );
 }

@@ -22,8 +22,14 @@ const LARGURA_OCR = 1800;
 /** Abaixo disto o "texto" reconhecido é ruído de imagem, não palavra. */
 const CONFIANCA_MINIMA = 45;
 
-/** Idiomas: o do leitor e o da maior parte do que ele lê. */
-const IDIOMAS = "por+eng";
+/**
+ * Dicionário padrão, quando quem chama não diz qual quer.
+ *
+ * Inglês sozinho porque é o fallback do app inteiro e o idioma mais provável de
+ * um livro técnico. A tela de leitura passa o do idioma em vigor (`IDIOMAS_OCR`
+ * em `lib/i18n/config`), que é o palpite bom de verdade.
+ */
+const IDIOMAS_PADRAO = "eng";
 
 type Trabalhador = {
   recognize: (
@@ -34,43 +40,51 @@ type Trabalhador = {
   terminate: () => Promise<unknown>;
 };
 
-let trabalhador: Promise<Trabalhador> | null = null;
-
 /**
- * O worker do tesseract, criado uma vez por aba.
+ * Um worker por conjunto de idiomas, vivo pelo tempo da aba.
  *
- * Ligar ele custa baixar o núcleo WASM e o dicionário do idioma; refazer isso a
- * cada página tornaria o OCR inviável. O worker e o núcleo vêm de `/tesseract`
- * (mesma origem); o dicionário vem de fora na primeira vez e fica no IndexedDB
- * do navegador.
+ * Ligar um custa baixar o núcleo WASM e o dicionário; refazer isso a cada página
+ * tornaria o OCR inviável. A chave é o conjunto de idiomas porque trocar o
+ * idioma do app troca o dicionário — e o worker antigo continua servindo, caso a
+ * pessoa volte pro idioma de antes no meio do mesmo livro.
+ *
+ * O worker e o núcleo vêm de `/tesseract` (mesma origem); o dicionário vem de
+ * fora na primeira vez e fica no IndexedDB do navegador.
  */
-async function pegarTrabalhador(): Promise<Trabalhador> {
-  if (trabalhador) return trabalhador;
+const trabalhadores = new Map<string, Promise<Trabalhador>>();
 
-  trabalhador = (async () => {
+async function pegarTrabalhador(idiomas: string): Promise<Trabalhador> {
+  const existente = trabalhadores.get(idiomas);
+  if (existente) return existente;
+
+  const novo = (async () => {
     const { createWorker } = await import("tesseract.js");
-    return (await createWorker(IDIOMAS, 1, {
+    return (await createWorker(idiomas, 1, {
       workerPath: "/tesseract/worker.min.js",
       corePath: "/tesseract",
     })) as unknown as Trabalhador;
   })();
 
-  trabalhador.catch(() => {
-    trabalhador = null; // deixa tentar de novo depois de uma falha de rede
+  novo.catch(() => {
+    trabalhadores.delete(idiomas); // deixa tentar de novo depois de uma falha de rede
   });
-  return trabalhador;
+  trabalhadores.set(idiomas, novo);
+  return novo;
 }
 
 /** Desliga o OCR e devolve a memória — o núcleo WASM não é pequeno. */
 export async function encerrarOcr(): Promise<void> {
-  const atual = trabalhador;
-  trabalhador = null;
-  if (!atual) return;
-  try {
-    await (await atual).terminate();
-  } catch {
-    // já morreu junto com a aba
-  }
+  const abertos = [...trabalhadores.values()];
+  trabalhadores.clear();
+  await Promise.all(
+    abertos.map(async (t) => {
+      try {
+        await (await t).terminate();
+      } catch {
+        // já morreu junto com a aba
+      }
+    }),
+  );
 }
 
 /**
@@ -82,17 +96,23 @@ export async function encerrarOcr(): Promise<void> {
 export async function blocosPorOcr(
   doc: PDFDocumentProxy,
   pageNumber: number,
-  { sinal }: { sinal?: AbortSignal } = {},
+  { sinal, idiomas }: OpcoesOcr = {},
 ): Promise<Bloco[]> {
-  const { colunas } = await remontarPorOcr(doc, pageNumber, { sinal });
+  const { colunas } = await remontarPorOcr(doc, pageNumber, { sinal, idiomas });
   return colunas.flat().map((p) => p.bloco);
 }
+
+export type OpcoesOcr = {
+  sinal?: AbortSignal;
+  /** Dicionários do tesseract, no formato `"por+eng"`. Padrão: só inglês. */
+  idiomas?: string;
+};
 
 /** O mesmo reconhecimento, devolvendo também o número impresso na página. */
 export async function remontarPorOcr(
   doc: PDFDocumentProxy,
   pageNumber: number,
-  { sinal }: { sinal?: AbortSignal } = {},
+  { sinal, idiomas = IDIOMAS_PADRAO }: OpcoesOcr = {},
 ): Promise<PaginaRemontada> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
@@ -112,7 +132,7 @@ export async function remontarPorOcr(
   await page.render({ canvas, canvasContext, viewport }).promise;
   if (sinal?.aborted) throw new DOMException("cancelado", "AbortError");
 
-  const motor = await pegarTrabalhador();
+  const motor = await pegarTrabalhador(idiomas);
   const { data } = await motor.recognize(canvas, undefined, { blocks: true });
   if (sinal?.aborted) throw new DOMException("cancelado", "AbortError");
 

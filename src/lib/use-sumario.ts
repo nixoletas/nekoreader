@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { obterSumario, salvarSumario } from "@/lib/offline-db";
 import type { ItemSumario } from "@/lib/sumario";
 import type { BookFormat } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/cliente";
+import { fmt } from "@/lib/i18n/formato";
 
 export type EstadoSumario = {
   itens: ItemSumario[] | null;
@@ -34,6 +36,7 @@ export function useSumario(
   formato: BookFormat,
   ativo: boolean,
 ): EstadoSumario {
+  const { d } = useI18n();
   const [estado, setEstado] = useState<EstadoSumario>(PARADO);
   // De qual livro/arquivo o trabalho já foi disparado — sem isso, cada abrir e
   // fechar da aba recomeçaria a varredura do zero.
@@ -58,9 +61,15 @@ export function useSumario(
           return;
         }
 
-        const itens = await montar(formato, fileUrl, controle.signal, (fracao) => {
-          if (vivo) setEstado((e) => ({ ...e, progresso: fracao }));
-        });
+        const itens = await montar(
+          formato,
+          fileUrl,
+          controle.signal,
+          (fracao) => {
+            if (vivo) setEstado((e) => ({ ...e, progresso: fracao }));
+          },
+          (n) => fmt(d.unit.chapterN, { n }),
+        );
         if (!vivo) return;
 
         setEstado({ ...PARADO, itens });
@@ -72,7 +81,7 @@ export function useSumario(
         feito.current = null; // deixa tentar de novo
         setEstado({
           ...PARADO,
-          erro: e instanceof Error ? e.message : "Não consegui ler o sumário.",
+          erro: e instanceof Error ? e.message : d.toc.failed,
         });
       }
     })();
@@ -81,7 +90,7 @@ export function useSumario(
       vivo = false;
       controle.abort();
     };
-  }, [ativo, fileUrl, bookId, formato]);
+  }, [ativo, fileUrl, bookId, formato, d]);
 
   return estado;
 }
@@ -95,10 +104,11 @@ async function montar(
   fileUrl: string,
   sinal: AbortSignal,
   aoProgredir: (fracao: number) => void,
+  rotuloCapitulo: (n: number) => string,
 ): Promise<ItemSumario[]> {
   if (formato === "epub") {
     const { abrirEpubDaUrl } = await import("@/lib/epub-doc");
-    return (await abrirEpubDaUrl(fileUrl)).sumario;
+    return (await abrirEpubDaUrl(fileUrl, undefined, rotuloCapitulo)).sumario;
   }
   const [{ abrirDoc }, { montarSumario }] = await Promise.all([
     import("@/lib/pdf"),

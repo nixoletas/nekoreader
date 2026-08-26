@@ -8,6 +8,7 @@ import {
 } from "@/lib/epub";
 import { blocosDoCapitulo } from "@/lib/epub-blocos";
 import type { Bloco } from "@/lib/pdf-blocos";
+import { ERRO, ErroApp } from "@/lib/erros";
 
 /**
  * Camada de navegador em cima do `epub.ts`: baixa o arquivo, guarda um aberto
@@ -22,6 +23,8 @@ const abertos = new Map<string, Promise<EpubAberto>>();
 export function abrirEpubDaUrl(
   url: string,
   aoProgredir?: (fracao: number) => void,
+  /** Como chamar um capítulo sem nome, no idioma da tela. */
+  rotuloCapitulo?: (n: number) => string,
 ): Promise<EpubAberto> {
   const jaAberto = abertos.get(url);
   if (jaAberto) return jaAberto;
@@ -30,7 +33,7 @@ export function abrirEpubDaUrl(
 
   const promessa = (async () => {
     const dados = await baixar(url, aoProgredir);
-    return abrirEpub(dados, analisadorDoNavegador());
+    return abrirEpub(dados, analisadorDoNavegador(), rotuloCapitulo);
   })();
 
   abertos.set(url, promessa);
@@ -44,7 +47,7 @@ async function baixar(
   aoProgredir?: (fracao: number) => void,
 ): Promise<ArrayBuffer> {
   const resposta = await fetch(url);
-  if (!resposta.ok) throw new Error(`Não consegui baixar o livro (${resposta.status}).`);
+  if (!resposta.ok) throw new ErroApp(ERRO.baixarLivro, `HTTP ${resposta.status}`);
 
   const total = Number(resposta.headers.get("content-length") ?? 0);
   if (!aoProgredir || !total || !resposta.body) return resposta.arrayBuffer();

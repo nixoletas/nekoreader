@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { Botao } from "@/components/ui";
+import { useT } from "@/lib/i18n/cliente";
 
 type Opcoes = {
   titulo: string;
@@ -59,6 +60,7 @@ export function usePrompt(): PromptFn {
 }
 
 export function DialogProvider({ children }: { children: React.ReactNode }) {
+  const d = useT();
   const [estado, setEstado] = useState<EstadoDialogo | null>(null);
   const [texto, setTexto] = useState("");
   const resolverRef = useRef<((v: string | null) => void) | null>(null);
@@ -156,7 +158,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                       className="flex-1"
                       onClick={() => responder(null)}
                     >
-                      {estado.textoCancelar ?? "Cancelar"}
+                      {estado.textoCancelar ?? d.common.cancel}
                     </Botao>
                   )}
                   <Botao
@@ -165,7 +167,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                     className="flex-1"
                     autoFocus={!ehPergunta}
                   >
-                    {estado.textoConfirmar ?? "OK"}
+                    {estado.textoConfirmar ?? d.common.ok}
                   </Botao>
                 </div>
               </form>

@@ -15,7 +15,12 @@ import {
   paraMarkdown,
 } from "../node_modules/.cache/teste/lib/exportar.mjs";
 
-const META = { titulo: "Livro de Teste", autor: "Alguém" };
+const META = {
+  titulo: "Livro de Teste",
+  autor: "Alguém",
+  idioma: "pt-BR",
+  textos: { sumario: "Sumário", paginas: "Páginas", trecho: "Trecho {n}" },
+};
 
 const semMarcas = { negrito: [], italico: [], sobrescrito: [], links: [] };
 

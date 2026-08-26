@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { abrirDoc } from "@/lib/pdf";
 import { paginaDoRotulo, rotuloDaPagina, type Rotulos } from "@/lib/pdf-rotulos";
 import { Botao } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/cliente";
 
 /** Largura do recorte de cada página, em pixel. Pequeno de propósito: são centenas. */
 const LARGURA_MINIATURA = 200;
@@ -38,6 +39,7 @@ export default function VisaoPaginas({
   onIr: (p: number) => void;
   onFechar: () => void;
 }) {
+  const { d, t } = useI18n();
   const paginas = Array.from({ length: Math.max(0, numPages) }, (_, i) => i + 1);
   // A grade mostra o número do livro; a posição na lista continua sendo a do arquivo.
   const numero = (p: number) => rotuloDaPagina(rotulos, p) ?? String(p);
@@ -63,17 +65,19 @@ export default function VisaoPaginas({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/97 backdrop-blur-sm" role="dialog" aria-modal aria-label="Páginas do livro">
+    <div className="fixed inset-0 z-50 flex flex-col bg-background/97 backdrop-blur-sm" role="dialog" aria-modal aria-label={d.pagesView.dialog}>
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <p className="display text-base">{eEpub ? "Capítulos" : "Páginas"}</p>
+        <p className="display text-base">
+          {eEpub ? d.pagesView.titleChapters : d.pagesView.title}
+        </p>
         <span className="text-xs text-muted">
-          {numero(pagina)} de {numero(numPages)}
+          {t(d.pagesView.ofTotal, { current: numero(pagina), total: numero(numPages) })}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <input
             type="text"
             inputMode="numeric"
-            placeholder="ir para"
+            placeholder={d.pagesView.goTo}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               // O que a pessoa digita é o número do livro; a página do arquivo é
@@ -85,9 +89,9 @@ export default function VisaoPaginas({
               if (v >= 1) onIr(Math.min(v, numPages || v));
             }}
             className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm outline-none focus:border-accent"
-            aria-label={eEpub ? "Ir para o capítulo" : "Ir para a página"}
+            aria-label={eEpub ? d.reader.goToChapter : d.reader.goToPage}
           />
-          <Botao variante="contorno" onClick={onFechar} aria-label="Fechar">
+          <Botao variante="contorno" onClick={onFechar} aria-label={d.common.close}>
             <X className="h-4 w-4" aria-hidden />
           </Botao>
         </div>
@@ -95,7 +99,7 @@ export default function VisaoPaginas({
 
       {!paginas.length ? (
         <p className="flex-1 px-6 py-16 text-center text-sm text-muted">
-          Abrindo o livro…
+          {d.pagesView.opening}
         </p>
       ) : (
         <ul className="safe-b grid flex-1 grid-cols-3 content-start gap-3 overflow-y-auto p-4 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">

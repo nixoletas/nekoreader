@@ -6,6 +6,8 @@ import { abrirDoc } from "@/lib/pdf";
 import { baixar, exportarLivro, type Formato } from "@/lib/exportar-pdf";
 import type { Rotulos } from "@/lib/pdf-rotulos";
 import { Botao } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/cliente";
+import { textoDoErro } from "@/lib/erros";
 
 /**
  * Tirar o livro do app: o texto remontado vira Markdown ou EPUB.
@@ -27,6 +29,7 @@ export default function ExportarLivro({
   rotulos: Rotulos | null;
   onFechar: () => void;
 }) {
+  const { d, t, locale } = useI18n();
   const [formato, setFormato] = useState<Formato | null>(null);
   const [progresso, setProgresso] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
@@ -59,7 +62,18 @@ export default function ExportarLivro({
       const { nome, blob } = await exportarLivro({
         doc,
         rotulos,
-        meta: { titulo, autor },
+        // O EPUB gerado carrega o idioma do app: é o que faz o leitor de EPUB
+        // hifenizar certo e dizer "Sumário" na língua de quem vai ler.
+        meta: {
+          titulo,
+          autor,
+          idioma: locale,
+          textos: {
+            sumario: d.exportBook.contents,
+            paginas: d.exportBook.pages,
+            trecho: d.exportBook.excerpt,
+          },
+        },
         formato: alvo,
         sinal: meu.signal,
         aoProgredir: (f) => {
@@ -72,7 +86,7 @@ export default function ExportarLivro({
       setPronto(nome);
     } catch (e) {
       if (meu.signal.aborted) return;
-      setErro(e instanceof Error ? e.message : "Não consegui converter este livro.");
+      setErro(textoDoErro(d, e));
     } finally {
       setFormato((f) => (meu.signal.aborted ? null : f));
     }
@@ -84,10 +98,10 @@ export default function ExportarLivro({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center">
       <div className="sobe w-full max-w-md rounded-t-3xl border border-border bg-surface p-5 shadow-2xl sm:rounded-2xl">
         <div className="mb-4 flex items-center gap-2">
-          <h2 className="display text-lg">Exportar o livro</h2>
+          <h2 className="display text-lg">{d.exportBook.title}</h2>
           <button
             onClick={onFechar}
-            aria-label="Fechar"
+            aria-label={d.common.close}
             className="tap ml-auto rounded-lg text-muted transition hover:text-foreground"
           >
             <X className="h-5 w-5" aria-hidden />
@@ -97,7 +111,7 @@ export default function ExportarLivro({
         {convertendo ? (
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted">
-              Remontando o livro inteiro — {Math.round(progresso * 100)}%
+              {t(d.exportBook.converting, { pct: Math.round(progresso * 100) })}
             </p>
             <div className="h-1.5 overflow-hidden rounded-full bg-background">
               <div
@@ -113,16 +127,14 @@ export default function ExportarLivro({
               }}
               className="w-full"
             >
-              Cancelar
+              {d.common.cancel}
             </Botao>
           </div>
         ) : pronto ? (
           <div className="space-y-4 py-2">
-            <p className="text-sm leading-relaxed">
-              Pronto — <strong>{pronto}</strong> foi salvo nos seus downloads.
-            </p>
+            <p className="text-sm leading-relaxed">{t(d.exportBook.done, { file: pronto })}</p>
             <Botao onClick={onFechar} className="w-full">
-              Fechar
+              {d.common.close}
             </Botao>
           </div>
         ) : (
@@ -131,19 +143,19 @@ export default function ExportarLivro({
 
             <Opcao
               icone={<BookMarked className="h-5 w-5" aria-hidden />}
-              titulo="EPUB"
-              descricao="Livro reflowable, com imagens, sumário e a numeração de página do original — abre no Kindle, Apple Books, Kobo."
+              titulo={d.exportBook.epubTitle}
+              descricao={d.exportBook.epubDescription}
               onClick={() => void converter("epub")}
             />
             <Opcao
               icone={<FileText className="h-5 w-5" aria-hidden />}
-              titulo="Markdown"
-              descricao="Texto puro com títulos, citações, código e tabelas. Cada página marcada, pra citar no Obsidian ou no Notion."
+              titulo={d.exportBook.markdownTitle}
+              descricao={d.exportBook.markdownDescription}
               onClick={() => void converter("markdown")}
             />
 
             <p className="pt-2 text-[11px] leading-relaxed text-muted">
-              A conversão acontece neste aparelho — o livro não sobe pra lugar nenhum.
+              {d.exportBook.localOnly}
             </p>
           </div>
         )}

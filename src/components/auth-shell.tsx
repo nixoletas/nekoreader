@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { i18nAtual } from "@/lib/i18n/servidor";
+import SeletorIdioma from "@/components/seletor-idioma";
 
-export default function AuthShell({
+export default async function AuthShell({
   titulo,
   subtitulo,
   children,
@@ -12,6 +14,8 @@ export default function AuthShell({
   children: ReactNode;
   rodape?: ReactNode;
 }) {
+  const { d } = await i18nAtual();
+
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       {/* manchas de tinta ao fundo */}
@@ -26,11 +30,17 @@ export default function AuthShell({
         style={{ background: "var(--gold)" }}
       />
 
+      {/* Trocar de idioma tem que existir **antes** da conta: quem cai aqui num
+          idioma que não fala não consegue nem ler o rótulo do campo de senha. */}
+      <div className="absolute right-4 top-4 z-10">
+        <SeletorIdioma />
+      </div>
+
       <div className="sobe relative w-full max-w-md">
-        <Link href="/login" className="mb-7 block text-center">
-          <span className="display text-3xl tracking-tight">Marginália</span>
+        <Link href="/" className="mb-7 block text-center">
+          <span className="display text-3xl tracking-tight">{d.brand.name}</span>
           <span className="mt-1 block text-xs uppercase tracking-[0.25em] text-muted">
-            leitor de pdf
+            {d.brand.kicker}
           </span>
         </Link>
 

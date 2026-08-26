@@ -12,12 +12,14 @@ import { rotuloDaPagina } from "@/lib/pdf-rotulos";
 import { usePrompt } from "@/components/dialog-provider";
 import BotaoTema from "@/components/botao-tema";
 import {
-  HIGHLIGHT_LABEL,
   porMaisRecente,
+  rotuloDaCor,
   swatch,
   type Book,
   type Highlight,
 } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/cliente";
+import SeletorIdioma from "@/components/seletor-idioma";
 
 /**
  * As marcações do livro em página inteira, pra ler de enfiada — o painel do leitor
@@ -28,6 +30,7 @@ export default function MarcacoesBlog() {
   const bookId = params.id;
   const router = useRouter();
   const [supabase] = useState(createClient);
+  const { d, p: pl } = useI18n();
   const perguntar = usePrompt();
 
   const [book, setBook] = useState<Book | null>(null);
@@ -53,7 +56,7 @@ export default function MarcacoesBlog() {
         .select("*")
         .eq("id", bookId)
         .single();
-      if (erroLivro || !livro) throw erroLivro ?? new Error("Livro não encontrado.");
+      if (erroLivro || !livro) throw erroLivro ?? new Error(d.reader.notFound);
 
       const { data: marcacoes } = await supabase
         .from("highlights")
@@ -72,7 +75,7 @@ export default function MarcacoesBlog() {
       setErro(null);
     } catch (e) {
       if (navigator.onLine) {
-        setErro(e instanceof Error ? e.message : "Não consegui carregar as marcações.");
+        setErro(e instanceof Error ? e.message : d.notesPage.loadFailed);
         return;
       }
       const salvo = await obterSnapshotLivro(bookId);
@@ -82,10 +85,10 @@ export default function MarcacoesBlog() {
         setHighlights(porMaisRecente(mesclado.highlights));
         setErro(null);
       } else {
-        setErro("Sem internet e este livro ainda não foi aberto neste aparelho.");
+        setErro(d.notesPage.offlineNever);
       }
     }
-  }, [bookId, supabase, router]);
+  }, [bookId, supabase, router, d]);
 
   useEffect(() => {
     if (!bookId) return;
@@ -98,10 +101,10 @@ export default function MarcacoesBlog() {
     const atual = highlights?.find((h) => h.id === id);
     if (!atual) return;
     const resposta = await perguntar({
-      titulo: atual.title ? "Renomear marcação" : "Dar um título à marcação",
+      titulo: atual.title ? d.highlight.titleEdit : d.highlight.titleAdd,
       valor: atual.title ?? "",
-      placeholder: "Ex.: definição de metadados",
-      textoConfirmar: "Salvar",
+      placeholder: d.highlight.titlePlaceholder,
+      textoConfirmar: d.common.save,
     });
     if (resposta === null) return;
     const title = resposta.trim() || null;
@@ -117,11 +120,11 @@ export default function MarcacoesBlog() {
     const atual = highlights?.find((h) => h.id === id);
     if (!atual) return;
     const resposta = await perguntar({
-      titulo: atual.note ? "Editar nota" : "Escrever uma nota",
+      titulo: atual.note ? d.highlight.noteEdit : d.highlight.noteAdd,
       valor: atual.note ?? "",
-      placeholder: "O que este trecho te fez pensar?",
+      placeholder: d.highlight.notePlaceholder,
       multilinha: true,
-      textoConfirmar: "Salvar",
+      textoConfirmar: d.common.save,
     });
     if (resposta === null) return;
     const note = resposta.trim() || null;
@@ -141,10 +144,10 @@ export default function MarcacoesBlog() {
   if (erro) {
     return (
       <div className="mx-auto max-w-lg px-4 py-24 text-center">
-        <p className="text-lg font-semibold">Não consegui abrir</p>
+        <p className="text-lg font-semibold">{d.notesPage.openFailed}</p>
         <p className="mt-2 text-sm text-muted">{erro}</p>
-        <Link href="/" className="mt-6 inline-block text-accent underline">
-          Voltar para a biblioteca
+        <Link href="/library" className="mt-6 inline-block text-accent underline">
+          {d.common.backToLibrary}
         </Link>
       </div>
     );
@@ -155,8 +158,8 @@ export default function MarcacoesBlog() {
       <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[46rem] items-center gap-2 px-4 py-2">
           <Link
-            href={`/livro/${bookId}`}
-            aria-label="Voltar para a leitura"
+            href={`/book/${bookId}`}
+            aria-label={d.common.backToReading}
             className="tap rounded-xl text-muted transition hover:text-foreground"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden />
@@ -164,17 +167,18 @@ export default function MarcacoesBlog() {
           <span className="min-w-0 flex-1 truncate text-sm text-muted">
             {book?.title ?? "…"}
           </span>
+          <SeletorIdioma compacto />
           <BotaoTema />
         </div>
       </header>
 
       <main className="mx-auto max-w-[46rem] px-5 pb-24 pt-8 sm:px-8">
-        <h1 className="display text-3xl leading-tight sm:text-4xl">Marcações</h1>
+        <h1 className="display text-3xl leading-tight sm:text-4xl">{d.notesPage.heading}</h1>
         {book && (
           <p className="mt-2 text-sm text-muted">
             {book.title}
             {book.author ? ` · ${book.author}` : ""}
-            {highlights ? ` · ${highlights.length} trecho${highlights.length === 1 ? "" : "s"}` : ""}
+            {highlights ? ` · ${pl(d.notesPage.count, highlights.length)}` : ""}
           </p>
         )}
 
@@ -194,15 +198,15 @@ export default function MarcacoesBlog() {
         ) : highlights.length === 0 ? (
           <div className="py-16 text-center">
             <Highlighter className="mx-auto h-8 w-8 text-muted" aria-hidden />
-            <p className="display mt-4 text-xl">Nenhuma marcação ainda</p>
+            <p className="display mt-4 text-xl">{d.notesPage.emptyTitle}</p>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted">
-              Selecione um trecho na leitura e escolha uma cor — ele aparece aqui.
+              {d.notesPage.emptyHint}
             </p>
             <Link
-              href={`/livro/${bookId}`}
+              href={`/book/${bookId}`}
               className="mt-6 inline-block text-accent underline"
             >
-              Voltar para a leitura
+              {d.common.backToReading}
             </Link>
           </div>
         ) : (
@@ -213,20 +217,20 @@ export default function MarcacoesBlog() {
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: swatch(h.color) }}
-                    aria-label={HIGHLIGHT_LABEL[h.color]}
+                    aria-label={rotuloDaCor(d, h.color)}
                   />
                   <Link
-                    href={`/livro/${bookId}?p=${h.page}`}
+                    href={`/book/${bookId}?p=${h.page}`}
                     className="text-[11px] uppercase tracking-[0.14em] text-muted transition hover:text-accent"
                   >
-                    {book?.format === "epub" ? "capítulo" : "página"}{" "}
+                    {book?.format === "epub" ? d.unit.chapter : d.unit.page}{" "}
                     {rotuloDaPagina(rotulos, h.page) ?? h.page}
                   </Link>
                   <span className="ml-auto flex opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
                     <button
                       onClick={() => anotar(h.id)}
-                      aria-label={h.note ? "Editar nota" : "Escrever uma nota"}
-                      title={h.note ? "Editar nota" : "Escrever uma nota"}
+                      aria-label={h.note ? d.highlight.noteEdit : d.highlight.noteAdd}
+                      title={h.note ? d.highlight.noteEdit : d.highlight.noteAdd}
                       className={`tap !min-h-9 !min-w-9 rounded-lg transition hover:text-accent ${
                         h.note ? "text-accent" : "text-muted"
                       }`}
@@ -235,14 +239,14 @@ export default function MarcacoesBlog() {
                     </button>
                     <button
                       onClick={() => renomear(h.id)}
-                      aria-label={h.title ? "Renomear marcação" : "Dar um título"}
+                      aria-label={h.title ? d.highlight.titleEdit : d.highlight.titleShort}
                       className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-accent"
                     >
                       <Pencil className="h-4 w-4" aria-hidden />
                     </button>
                     <button
                       onClick={() => apagar(h.id)}
-                      aria-label="Apagar marcação"
+                      aria-label={d.highlight.deleteAria}
                       className="tap !min-h-9 !min-w-9 rounded-lg text-muted transition hover:text-red-500"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden />
@@ -257,7 +261,7 @@ export default function MarcacoesBlog() {
                 )}
 
                 <blockquote className="trecho mt-2">
-                  {h.text || "(trecho sem texto)"}
+                  {h.text || d.highlight.noText}
                 </blockquote>
 
                 {/* A nota é a voz de quem leu — fica do lado de fora da citação,

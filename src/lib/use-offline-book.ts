@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { urlAssinadaDoLivro } from "@/lib/pdf-url-cache";
 import { obterPdfOffline, removerPdfOffline, salvarPdfOffline } from "@/lib/offline-db";
 import { useAlert } from "@/components/dialog-provider";
+import { useT } from "@/lib/i18n/cliente";
+import { textoDoErro } from "@/lib/erros";
 import type { Book } from "@/lib/types";
 
 type Status = "verificando" | "ausente" | "baixando" | "disponivel";
@@ -14,6 +16,7 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path" | "format"
   const [status, setStatus] = useState<Status>("verificando");
   const [progresso, setProgresso] = useState<number | null>(null);
   const alertar = useAlert();
+  const d = useT();
 
   useEffect(() => {
     let vivo = true;
@@ -32,7 +35,9 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path" | "format"
       const supabase = createClient();
       const url = await urlAssinadaDoLivro(supabase, book.storage_path);
       const resp = await fetch(url);
-      if (!resp.ok || !resp.body) throw new Error("Falha ao baixar o arquivo.");
+      // O título do aviso já diz que o download falhou; o que falta é o porquê,
+      // e o código HTTP é a única pista que existe aqui.
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
 
       const total = Number(resp.headers.get("content-length")) || 0;
       const reader = resp.body.getReader();
@@ -64,14 +69,11 @@ export function useOfflineBook(book: Pick<Book, "id" | "storage_path" | "format"
       setStatus("disponivel");
     } catch (e) {
       setStatus("ausente");
-      await alertar({
-        titulo: "Não consegui baixar o livro",
-        mensagem: e instanceof Error ? e.message : undefined,
-      });
+      await alertar({ titulo: d.card.downloadFailed, mensagem: textoDoErro(d, e) });
     } finally {
       setProgresso(null);
     }
-  }, [book.id, book.storage_path, book.format, alertar]);
+  }, [book.id, book.storage_path, book.format, alertar, d]);
 
   const remover = useCallback(async () => {
     await removerPdfOffline(book.id);

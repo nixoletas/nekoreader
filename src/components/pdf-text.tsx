@@ -7,6 +7,9 @@ import { extrairBlocos } from "@/lib/pdf-text";
 import { obterOcr, salvarOcr } from "@/lib/offline-db";
 import type { Bloco } from "@/lib/pdf-blocos";
 import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
+import { useI18n } from "@/lib/i18n/cliente";
+import { IDIOMAS_OCR } from "@/lib/i18n/config";
+import { textoDoErro } from "@/lib/erros";
 import type { Highlight, HighlightColor, TextSpan } from "@/lib/types";
 
 // Quantas páginas já remontadas (com os recortes de imagem) ficam guardadas — folhear
@@ -43,6 +46,7 @@ export default function PdfText({
   onSwipe: (dir: 1 | -1) => void;
   onModoPagina: () => void;
 }) {
+  const { d, t, locale } = useI18n();
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<number | null>(null);
@@ -102,7 +106,7 @@ export default function PdfText({
         cache.definir(chave, finais);
         setBlocos(finais);
       } catch (e) {
-        if (vivo) setErro(e instanceof Error ? e.message : "Falhou ao ler o PDF.");
+        if (vivo) setErro(textoDoErro(d, e));
       }
     })();
 
@@ -112,7 +116,7 @@ export default function PdfText({
       // página que saiu da tela.
       ocrEmCurso.current?.abort();
     };
-  }, [fileUrl, bookId, pageNumber, onLoadSuccess, cache]);
+  }, [fileUrl, bookId, pageNumber, onLoadSuccess, cache, d]);
 
   /**
    * Lê a página digitalizada com OCR, a pedido.
@@ -131,7 +135,13 @@ export default function PdfText({
     try {
       const { blocosPorOcr } = await import("@/lib/pdf-ocr");
       const doc = await abrirDoc(fileUrl);
-      const lidos = await blocosPorOcr(doc, pageNumber, { sinal: meu.signal });
+      // O dicionário do OCR segue o idioma do app: quem lê em francês está quase
+      // sempre lendo livro em francês, e o tesseract erra feio com o dicionário
+      // errado ("é" vira "6").
+      const lidos = await blocosPorOcr(doc, pageNumber, {
+        sinal: meu.signal,
+        idiomas: IDIOMAS_OCR[locale],
+      });
       if (meu.signal.aborted) return;
 
       cache.definir(`${fileUrl}#${pageNumber}`, lidos);
@@ -141,13 +151,13 @@ export default function PdfText({
       if (meu.signal.aborted) return;
       setErro(
         e instanceof Error && e.message
-          ? `Não consegui reconhecer o texto: ${e.message}`
-          : "Não consegui reconhecer o texto desta página.",
+          ? t(d.text.ocrFailedWith, { message: e.message })
+          : d.text.ocrFailed,
       );
     } finally {
       if (!meu.signal.aborted) setLendoImagem(false);
     }
-  }, [fileUrl, bookId, pageNumber, cache]);
+  }, [fileUrl, bookId, pageNumber, cache, d, t, locale]);
 
   return (
     <LeitorTexto
@@ -163,7 +173,7 @@ export default function PdfText({
       onModoPagina={onModoPagina}
       onOcr={() => void rodarOcr()}
       lendoImagem={lendoImagem}
-      textoSemConteudo="Esta página não tem camada de texto — é digitalizada. Dá pra reconhecer o texto dela aqui mesmo, no seu aparelho."
+      textoSemConteudo={d.text.noTextLayer}
     />
   );
 }

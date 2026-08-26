@@ -23,6 +23,23 @@ export type PaginaExportada = {
 export type MetaLivro = {
   titulo: string;
   autor: string | null;
+  /**
+   * Idioma do arquivo gerado (`dc:language`, `lang=`).
+   *
+   * Não é o idioma do livro — que a gente não sabe — e sim o de quem exportou.
+   * É o palpite disponível, e é o que faz o leitor de EPUB hifenizar e ordenar
+   * como a pessoa espera em vez de assumir inglês.
+   */
+  idioma: string;
+  /** As poucas palavras que o próprio arquivo carrega, já traduzidas. */
+  textos: {
+    /** Título da navegação ("Sumário"). */
+    sumario: string;
+    /** Título da lista de páginas ("Páginas"). */
+    paginas: string;
+    /** Nome de um trecho sem título, com `{n}` no lugar do número. */
+    trecho: string;
+  };
 };
 
 /* ----------------------------------------------------------- Markdown */
@@ -157,7 +174,10 @@ export async function paraEpub(
         }
       }
 
-      zip.file(`OEBPS/${nome}`, paginaXhtml(trecho.titulo ?? meta.titulo, corpo.join("\n")));
+      zip.file(
+        `OEBPS/${nome}`,
+        paginaXhtml(trecho.titulo ?? meta.titulo, corpo.join("\n"), meta.idioma),
+      );
       return { nome, titulo: trecho.titulo, id: `t${i + 1}` };
     }),
   );
@@ -263,9 +283,9 @@ async function guardarImagem(
   }
 }
 
-function paginaXhtml(titulo: string, corpo: string): string {
+function paginaXhtml(titulo: string, corpo: string, idioma: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="pt-BR">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${escaparXml(idioma)}">
 <head>
   <title>${escaparXml(titulo)}</title>
   <link rel="stylesheet" type="text/css" href="estilo.css"/>
@@ -284,7 +304,9 @@ function navXhtml(
   const toc = arquivos
     .map(
       (a, i) =>
-        `<li><a href="${a.nome}">${escaparXml(a.titulo ?? `Trecho ${i + 1}`)}</a></li>`,
+        `<li><a href="${a.nome}">${escaparXml(
+          a.titulo ?? meta.textos.trecho.replace("{n}", String(i + 1)),
+        )}</a></li>`,
     )
     .join("\n      ");
 
@@ -295,17 +317,17 @@ function navXhtml(
     .join("\n      ");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="pt-BR">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${escaparXml(meta.idioma)}">
 <head><title>${escaparXml(meta.titulo)}</title></head>
 <body>
   <nav epub:type="toc" id="toc">
-    <h1>Sumário</h1>
+    <h1>${escaparXml(meta.textos.sumario)}</h1>
     <ol>
       ${toc}
     </ol>
   </nav>
   <nav epub:type="page-list" id="paginas" hidden="hidden">
-    <h1>Páginas</h1>
+    <h1>${escaparXml(meta.textos.paginas)}</h1>
     <ol>
       ${lista}
     </ol>
@@ -332,10 +354,10 @@ function opf(
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="id">urn:uuid:${crypto.randomUUID()}</dc:identifier>
     <dc:title>${escaparXml(meta.titulo)}</dc:title>
-    <dc:language>pt-BR</dc:language>
+    <dc:language>${escaparXml(meta.idioma)}</dc:language>
     ${meta.autor ? `<dc:creator>${escaparXml(meta.autor)}</dc:creator>` : ""}
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, "Z")}</meta>
-    <meta property="source-of-pagination">PDF original</meta>
+    <meta property="source-of-pagination">PDF</meta>
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>

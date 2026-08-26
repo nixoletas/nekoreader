@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Aviso, Botao, Campo } from "@/components/ui";
+import { useT } from "@/lib/i18n/cliente";
 
-export default function EsqueciForm() {
+export default function ForgotForm() {
+  const d = useT();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -17,13 +19,13 @@ export default function EsqueciForm() {
 
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/nova-senha`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/new-password`,
     });
 
     if (error) {
       setErro(
         error.message.toLowerCase().includes("rate")
-          ? "Muitas tentativas. Espere alguns minutos."
+          ? d.auth.errors.rateLimitMinutes
           : error.message,
       );
       setBusy(false);
@@ -35,15 +37,18 @@ export default function EsqueciForm() {
   }
 
   if (enviado) {
+    // O e-mail sai em negrito no meio da frase — é o que deixa a pessoa conferir
+    // se digitou certo antes de ir esperar na caixa de entrada. Por isso a frase
+    // é partida no `{email}` em vez de passar pelo `fmt()`.
+    const [antes, depois] = d.auth.forgot.sent.split("{email}");
     return (
       <div className="space-y-4">
         <Aviso tipo="ok">
-          Se existe conta com <strong>{email}</strong>, o link já está a caminho.
-          Confira também a caixa de spam.
+          {antes}
+          <strong>{email}</strong>
+          {depois ?? ""}
         </Aviso>
-        <p className="text-sm text-muted">
-          O link vale por 1 hora e abre direto a tela de nova senha.
-        </p>
+        <p className="text-sm text-muted">{d.auth.forgot.sentNote}</p>
       </div>
     );
   }
@@ -51,7 +56,7 @@ export default function EsqueciForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <Campo
-        label="E-mail da conta"
+        label={d.auth.forgot.email}
         type="email"
         required
         autoComplete="email"
@@ -59,13 +64,13 @@ export default function EsqueciForm() {
         autoCapitalize="none"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="voce@exemplo.com"
+        placeholder={d.auth.login.emailPlaceholder}
       />
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
       <Botao type="submit" disabled={busy} className="w-full">
-        {busy ? "Enviando..." : "Enviar link de recuperação"}
+        {busy ? d.auth.forgot.sending : d.auth.forgot.submit}
       </Botao>
     </form>
   );

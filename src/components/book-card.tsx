@@ -5,10 +5,12 @@ import { useRef, useState } from "react";
 import { Check, Download, Highlighter, ImageUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatarTamanho } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/cliente";
 import { useOfflineBook } from "@/lib/use-offline-book";
 import { useRotulos } from "@/lib/use-rotulos";
 import { rotuloDaPagina } from "@/lib/pdf-rotulos";
 import { trocarCapa } from "@/lib/trocar-capa";
+import { textoDoErro } from "@/lib/erros";
 import { useAlert, useConfirm } from "@/components/dialog-provider";
 import EditarLivro from "@/components/editar-livro";
 import type { Book } from "@/lib/types";
@@ -26,6 +28,7 @@ export default function BookCard({
   onExcluido: () => void;
   onAtualizado: () => void;
 }) {
+  const { d, t, locale } = useI18n();
   const [removendo, setRemovendo] = useState(false);
   const [trocandoCapa, setTrocandoCapa] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -34,7 +37,7 @@ export default function BookCard({
   const confirmar = useConfirm();
   const alertar = useAlert();
 
-  const rotulo = book.format === "epub" ? "cap." : "pág.";
+  const rotulo = book.format === "epub" ? d.card.chapterShort : d.card.pageShort;
   // A numeração impressa do livro, quando este aparelho já a descobriu (o leitor
   // guarda). Sem isso o card diria "pág. 121" e o leitor "pág. 105" — o mesmo
   // ponto do mesmo livro com dois números.
@@ -50,9 +53,9 @@ export default function BookCard({
     e.preventDefault();
     e.stopPropagation();
     const ok = await confirmar({
-      titulo: `Tirar “${book.title}” da estante?`,
-      mensagem: "As marcações vão junto — não dá pra desfazer.",
-      textoConfirmar: "Tirar da estante",
+      titulo: t(d.card.deleteTitle, { title: book.title }),
+      mensagem: d.card.deleteMessage,
+      textoConfirmar: d.card.deleteConfirm,
       perigo: true,
     });
     if (!ok) return;
@@ -63,7 +66,7 @@ export default function BookCard({
     await supabase.storage.from("books").remove(paths);
     const { error } = await supabase.from("books").delete().eq("id", book.id);
     if (error) {
-      await alertar({ titulo: "Não consegui excluir", mensagem: error.message });
+      await alertar({ titulo: d.card.deleteFailed, mensagem: error.message });
       setRemovendo(false);
       return;
     }
@@ -76,8 +79,8 @@ export default function BookCard({
     if (offline.status === "baixando") return;
     if (offline.status === "disponivel") {
       const ok = await confirmar({
-        titulo: `Remover a cópia offline de “${book.title}”?`,
-        textoConfirmar: "Remover",
+        titulo: t(d.card.offlineRemoveTitle, { title: book.title }),
+        textoConfirmar: d.common.remove,
         perigo: true,
       });
       if (!ok) return;
@@ -100,10 +103,7 @@ export default function BookCard({
       await trocarCapa(createClient(), book, arquivo);
       onAtualizado();
     } catch (err) {
-      await alertar({
-        titulo: "Não consegui trocar a capa",
-        mensagem: err instanceof Error ? err.message : undefined,
-      });
+      await alertar({ titulo: d.card.coverFailed, mensagem: textoDoErro(d, err) });
     } finally {
       setTrocandoCapa(false);
       if (capaRef.current) capaRef.current.value = "";
@@ -112,7 +112,7 @@ export default function BookCard({
 
   return (
     <article className="group relative">
-      <Link href={`/livro/${book.id}`} className="block">
+      <Link href={`/book/${book.id}`} className="block">
         {/* capa com lombada */}
         <div className="relative aspect-[3/4] overflow-hidden rounded-r-xl rounded-l-md bg-surface shadow-[var(--shadow)] transition duration-300 group-hover:-translate-y-1 group-hover:shadow-lg">
           <div
@@ -163,7 +163,7 @@ export default function BookCard({
           {book.total_pages
             ? ` ${numero(book.last_page)} / ${numero(book.total_pages)}`
             : ` ${numero(book.last_page)}`}
-          {book.size_bytes ? ` · ${formatarTamanho(book.size_bytes)}` : ""}
+          {book.size_bytes ? ` · ${formatarTamanho(book.size_bytes, locale)}` : ""}
         </p>
       </Link>
 
@@ -178,7 +178,7 @@ export default function BookCard({
       <button
         onClick={excluir}
         disabled={removendo}
-        aria-label={`Excluir ${book.title}`}
+        aria-label={t(d.card.deleteAria, { title: book.title })}
         className="tap absolute right-1 top-1 !min-h-10 !min-w-10 rounded-full bg-black/45 text-white opacity-0 backdrop-blur-sm transition hover:bg-red-600 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
       >
         {removendo ? (
@@ -191,8 +191,8 @@ export default function BookCard({
       <button
         onClick={escolherCapa}
         disabled={trocandoCapa}
-        aria-label={`Trocar a capa de ${book.title}`}
-        title="Trocar a capa"
+        aria-label={t(d.card.coverChangeAria, { title: book.title })}
+        title={d.card.coverChange}
         className="tap absolute right-1 top-12 !min-h-10 !min-w-10 rounded-full bg-black/45 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/65 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 disabled:opacity-40"
       >
         {trocandoCapa ? (
@@ -209,8 +209,8 @@ export default function BookCard({
           e.stopPropagation();
           setEditando(true);
         }}
-        aria-label={`Editar título e autor de ${book.title}`}
-        title="Editar título e autor"
+        aria-label={t(d.card.editAria, { title: book.title })}
+        title={d.card.edit}
         className="tap absolute right-1 top-[5.5rem] !min-h-10 !min-w-10 rounded-full bg-black/45 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/65 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
       >
         <Pencil className="h-4 w-4" aria-hidden />
@@ -229,15 +229,15 @@ export default function BookCard({
         disabled={offline.status === "baixando"}
         aria-label={
           offline.status === "disponivel"
-            ? `Remover cópia offline de ${book.title}`
+            ? t(d.card.offlineRemoveAria, { title: book.title })
             : offline.status === "baixando"
-              ? "Baixando para leitura offline"
-              : `Disponibilizar ${book.title} offline`
+              ? d.card.offlineDownloading
+              : t(d.card.offlineMakeAria, { title: book.title })
         }
         title={
           offline.status === "disponivel"
-            ? "Disponível offline"
-            : "Disponibilizar offline"
+            ? d.card.offlineAvailable
+            : d.card.offlineMake
         }
         className={`tap absolute left-1 top-1 !min-h-10 !min-w-10 rounded-full text-xs font-semibold text-white backdrop-blur-sm transition ${
           offline.status === "disponivel"

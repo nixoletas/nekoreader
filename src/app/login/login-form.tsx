@@ -5,13 +5,16 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Aviso, Botao, Campo } from "@/components/ui";
+import { useT } from "@/lib/i18n/cliente";
+import type { Dicionario } from "@/lib/i18n/dicionarios";
 
 type Mode = "login" | "signup";
 
 export default function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
+  const next = params.get("next") || "/library";
+  const d = useT();
 
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -29,8 +32,8 @@ export default function LoginForm() {
     setInfo(null);
 
     if (mode === "signup") {
-      if (senha.length < 6) return setError("A senha precisa de 6 caracteres ou mais.");
-      if (senha !== senha2) return setError("As senhas não são iguais.");
+      if (senha.length < 6) return setError(d.auth.login.tooShort);
+      if (senha !== senha2) return setError(d.auth.login.mismatch);
     }
 
     setBusy(true);
@@ -45,12 +48,12 @@ export default function LoginForm() {
         },
       });
       if (error) {
-        setError(traduzir(error.message));
+        setError(traduzir(error.message, d));
         setBusy(false);
         return;
       }
       if (!data.session) {
-        setInfo("Conta criada. Confirme o e-mail que enviamos e entre.");
+        setInfo(d.auth.login.created);
         setMode("login");
         setSenha2("");
         setBusy(false);
@@ -62,7 +65,7 @@ export default function LoginForm() {
         password: senha,
       });
       if (error) {
-        setError(traduzir(error.message));
+        setError(traduzir(error.message, d));
         setBusy(false);
         return;
       }
@@ -90,13 +93,13 @@ export default function LoginForm() {
                 : "text-muted hover:text-foreground"
             }`}
           >
-            {m === "login" ? "Entrar" : "Criar conta"}
+            {m === "login" ? d.auth.login.tabSignIn : d.auth.login.tabSignUp}
           </button>
         ))}
       </div>
 
       <Campo
-        label="E-mail"
+        label={d.auth.login.email}
         type="email"
         required
         autoComplete="email"
@@ -104,25 +107,27 @@ export default function LoginForm() {
         autoCapitalize="none"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="voce@exemplo.com"
+        placeholder={d.auth.login.emailPlaceholder}
       />
 
       <Campo
-        label="Senha"
+        label={d.auth.login.password}
         type="password"
         required
         minLength={6}
         autoComplete={mode === "signup" ? "new-password" : "current-password"}
         value={senha}
         onChange={(e) => setSenha(e.target.value)}
-        placeholder={mode === "signup" ? "no mínimo 6 caracteres" : "sua senha"}
+        placeholder={
+          mode === "signup" ? d.auth.login.passwordNew : d.auth.login.passwordCurrent
+        }
         hint={
           mode === "login" ? (
             <Link
-              href="/esqueci"
+              href="/forgot"
               className="font-medium text-accent hover:underline"
             >
-              Esqueci a senha
+              {d.auth.login.forgot}
             </Link>
           ) : undefined
         }
@@ -131,19 +136,19 @@ export default function LoginForm() {
       {mode === "signup" && (
         <div className="sobe">
           <Campo
-            label="Confirmar senha"
+            label={d.auth.login.confirm}
             type="password"
             required
             minLength={6}
             autoComplete="new-password"
             value={senha2}
             onChange={(e) => setSenha2(e.target.value)}
-            placeholder="repita a senha"
+            placeholder={d.auth.login.confirmPlaceholder}
             aria-invalid={senhasDiferem}
           />
           {senhasDiferem && (
             <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-              As senhas não são iguais.
+              {d.auth.login.mismatch}
             </p>
           )}
         </div>
@@ -153,19 +158,29 @@ export default function LoginForm() {
       {info && <Aviso tipo="ok">{info}</Aviso>}
 
       <Botao type="submit" disabled={busy || senhasDiferem} className="w-full">
-        {busy ? "Um instante..." : mode === "login" ? "Entrar" : "Criar conta"}
+        {busy
+          ? d.common.justAMoment
+          : mode === "login"
+            ? d.auth.login.tabSignIn
+            : d.auth.login.tabSignUp}
       </Botao>
     </form>
   );
 }
 
-function traduzir(msg: string) {
+/**
+ * O erro do Supabase, dito no idioma da pessoa.
+ *
+ * A mensagem crua vem sempre em inglês e fala de "credentials" e "rate limit";
+ * o que não estiver na lista passa direto, porque um inglês obscuro ainda é
+ * melhor que um "algo deu errado" que não diz nada.
+ */
+function traduzir(msg: string, d: Dicionario) {
   const m = msg.toLowerCase();
-  if (m.includes("invalid login credentials")) return "E-mail ou senha inválidos.";
-  if (m.includes("user already registered")) return "Esse e-mail já tem conta.";
-  if (m.includes("email not confirmed")) return "Confirme seu e-mail antes de entrar.";
-  if (m.includes("password should be")) return "Senha muito curta (mínimo 6).";
-  if (m.includes("rate limit") || m.includes("too many"))
-    return "Muitas tentativas. Espere um pouco.";
+  if (m.includes("invalid login credentials")) return d.auth.errors.invalidCredentials;
+  if (m.includes("user already registered")) return d.auth.errors.alreadyRegistered;
+  if (m.includes("email not confirmed")) return d.auth.errors.notConfirmed;
+  if (m.includes("password should be")) return d.auth.errors.weakPassword;
+  if (m.includes("rate limit") || m.includes("too many")) return d.auth.errors.rateLimit;
   return msg;
 }

@@ -7,13 +7,14 @@ import { useSwipe } from "@/lib/swipe";
 import Balao from "@/components/balao";
 import { BarraProgresso, Botao } from "@/components/ui";
 import {
-  HIGHLIGHT_LABEL,
   fill,
+  rotuloDaCor,
   swatch,
   type Highlight,
   type HighlightColor,
   type TextSpan,
 } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/cliente";
 
 type Pending = { spans: TextSpan[]; text: string; x: number; y: number; h: number };
 type Ativa = { highlight: Highlight; x: number; y: number; h: number };
@@ -84,6 +85,7 @@ export default function LeitorTexto({
   lendoImagem?: boolean;
   textoSemConteudo: string;
 }) {
+  const { d, t } = useI18n();
   const [pending, setPending] = useState<Pending | null>(null);
   const [ativa, setAtiva] = useState<Ativa | null>(null);
   const artigoRef = useRef<HTMLElement>(null);
@@ -218,7 +220,7 @@ export default function LeitorTexto({
   if (!blocos) {
     return (
       <div className="mx-auto w-full max-w-[38rem] lg:max-w-[44rem] xl:max-w-[50rem] space-y-3 py-6">
-        {progresso !== null && <BarraProgresso texto="Abrindo o livro" pct={progresso} />}
+        {progresso !== null && <BarraProgresso texto={d.text.openingBook} pct={progresso} />}
 
         <div className="animate-pulse space-y-3">
           {[...Array(9)].map((_, i) => (
@@ -241,21 +243,18 @@ export default function LeitorTexto({
         <div className="mt-5 flex flex-col items-stretch gap-2">
           {onOcr && (
             <Botao onClick={onOcr} disabled={lendoImagem}>
-              {lendoImagem ? "Lendo a página…" : "Reconhecer o texto (OCR)"}
+              {lendoImagem ? d.text.runningOcr : d.text.runOcr}
             </Botao>
           )}
           {onModoPagina && (
             <Botao variante="contorno" onClick={onModoPagina}>
-              Ver como página
+              {d.text.viewAsPage}
             </Botao>
           )}
         </div>
 
         {lendoImagem && (
-          <p className="mt-4 text-xs leading-relaxed text-muted">
-            Na primeira vez o dicionário do idioma é baixado; depois disso o
-            reconhecimento roda inteiro neste aparelho.
-          </p>
+          <p className="mt-4 text-xs leading-relaxed text-muted">{d.text.ocrNote}</p>
         )}
       </div>
     );
@@ -406,7 +405,7 @@ export default function LeitorTexto({
             <button
               key={c}
               onClick={() => void salvar(c)}
-              aria-label={`Marcar em ${HIGHLIGHT_LABEL[c].toLowerCase()}`}
+              aria-label={t(d.highlight.markIn, { color: rotuloDaCor(d, c) })}
               className="h-10 w-10 rounded-full border-2 border-white/25 transition active:scale-90"
               style={{ background: swatch(c) }}
             />
@@ -418,7 +417,7 @@ export default function LeitorTexto({
               noBalao.current = false;
               window.getSelection()?.removeAllRanges();
             }}
-            aria-label="Cancelar"
+            aria-label={d.common.cancel}
             className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition active:scale-90"
           >
             <X className="h-4 w-4" aria-hidden />

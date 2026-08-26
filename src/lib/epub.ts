@@ -13,6 +13,7 @@
 
 import JSZip from "jszip";
 import { ajustar, type ItemSumario } from "@/lib/sumario";
+import { ERRO, ErroApp } from "@/lib/erros";
 
 /** Converte texto XML/XHTML em documento. Injetado pra não amarrar no DOMParser. */
 export type Analisador = (texto: string, tipo: "xml" | "xhtml") => Document;
@@ -24,7 +25,8 @@ export type Capitulo = {
 };
 
 export type EpubAberto = {
-  titulo: string;
+  /** `null` quando o arquivo não declara título — aí quem chama usa o nome dele. */
+  titulo: string | null;
   autor: string | null;
   /** Capítulos na ordem de leitura (a "lombada" do EPUB). */
   capitulos: Capitulo[];
@@ -93,6 +95,14 @@ export function resolverCaminho(base: string, relativo: string): string {
 export async function abrirEpub(
   dado: ArrayBuffer | Blob | Uint8Array,
   analisar: Analisador,
+  /**
+   * Como chamar um capítulo quando o livro não traz sumário e nem título nenhum.
+   *
+   * Vem de fora porque este módulo é código puro — roda no teste, sem React e
+   * sem dicionário. Quem abre o EPUB na tela passa a frase no idioma da pessoa;
+   * o padrão em inglês é o mesmo padrão do app.
+   */
+  rotuloCapitulo: (n: number) => string = (n) => `Chapter ${n}`,
 ): Promise<EpubAberto> {
   const zip = await JSZip.loadAsync(dado as ArrayBuffer);
 
@@ -102,17 +112,17 @@ export async function abrirEpub(
   };
 
   const container = await lerTexto("META-INF/container.xml");
-  if (!container) throw new Error("Não parece um EPUB: falta o META-INF/container.xml.");
+  if (!container) throw new ErroApp(ERRO.epubInvalido);
 
   const caminhoOpf = acharOpf(analisar(container, "xml"));
   if (!caminhoOpf) throw new Error("EPUB sem índice (OPF) declarado.");
 
   const opfBruto = await lerTexto(caminhoOpf);
-  if (!opfBruto) throw new Error("O índice (OPF) do EPUB não está no arquivo.");
+  if (!opfBruto) throw new ErroApp(ERRO.epubSemOpf);
 
   const opf = lerOpf(analisar(opfBruto, "xml"), caminhoOpf);
 
-  const sumario = await lerSumario(opf, lerTexto, analisar);
+  const sumario = await lerSumario(opf, lerTexto, analisar, rotuloCapitulo);
 
   return {
     titulo: opf.titulo,
@@ -141,7 +151,7 @@ function acharOpf(doc: Document): string | null {
 }
 
 type Opf = {
-  titulo: string;
+  titulo: string | null;
   autor: string | null;
   capitulos: Capitulo[];
   capa: string | null;
@@ -202,7 +212,7 @@ function lerOpf(doc: Document, caminhoOpf: string): Opf {
   }
 
   return {
-    titulo: texto("title") ?? "Livro sem título",
+    titulo: texto("title"),
     autor: texto("creator"),
     capitulos,
     capa: acharCapa(doc, porId),
@@ -241,6 +251,7 @@ async function lerSumario(
   opf: Opf,
   lerTexto: (caminho: string) => Promise<string | null>,
   analisar: Analisador,
+  rotuloCapitulo: (n: number) => string,
 ): Promise<ItemSumario[]> {
   const indice = new Map<string, number>();
   opf.capitulos.forEach((c, i) => indice.set(c.href, i + 1));
@@ -261,7 +272,7 @@ async function lerSumario(
   }
   // Sem sumário declarado, a lombada já é uma navegação: um item por capítulo.
   return opf.capitulos.map((c, i) => ({
-    titulo: `Capítulo ${i + 1}`,
+    titulo: rotuloCapitulo(i + 1),
     nivel: 1,
     pagina: i + 1,
   }));

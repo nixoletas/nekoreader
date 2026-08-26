@@ -1,7 +1,9 @@
-# Marginália — leitor de PDF
+# Nekoreader — leitor de PDF e EPUB
 
 App web (PWA) pra ler PDFs com conta própria, estante de livros, marcação de
-texto, marcador de página e memória de onde você parou.
+texto, marcador de página e memória de onde você parou. Fala seis idiomas.
+
+Domínio: **nekoreader.com**
 
 **Stack:** Next.js 16 (App Router) · React 19 · Tailwind v4 · Supabase
 (Auth + Postgres + Storage) · react-pdf / pdf.js
@@ -12,14 +14,15 @@ texto, marcador de página e memória de onde você parou.
 
 | Função | Onde |
 |---|---|
+| Propaganda do app pra quem ainda não tem conta | `/` |
 | Criar conta (senha + confirmação) e entrar | `/login` |
-| Esqueci a senha → link por e-mail → nova senha | `/esqueci` → `/nova-senha` |
-| Estante com upload de PDF/EPUB (arrastar ou tocar) | `/` |
-| Com a estante cheia, o envio some num "+" no canto (modal) | `/` |
-| Capa gerada da página 1 + barra de progresso | `/` |
-| "Continuar lendo" com a página exata | `/` |
-| Leitor com zoom, ← →, deslizar o dedo, ir pra página | `/livro/[id]` |
-| Marcar texto em 4 cores; tocar na marcação pra apagar | `/livro/[id]` |
+| Esqueci a senha → link por e-mail → nova senha | `/forgot` → `/new-password` |
+| Estante com upload de PDF/EPUB (arrastar ou tocar) | `/library` |
+| Com a estante cheia, o envio some num "+" no canto (modal) | `/library` |
+| Capa gerada da página 1 + barra de progresso | `/library` |
+| "Continuar lendo" com a página exata | `/library` |
+| Leitor com zoom, ← →, deslizar o dedo, ir pra página | `/book/[id]` |
+| Marcar texto em 4 cores; tocar na marcação pra apagar | `/book/[id]` |
 | Marcar página (★) e lista de páginas guardadas | painel |
 | Salva a última página lida sozinho (debounce 700ms) | automático |
 | Instalável no celular (PWA, standalone, ícone próprio) | manifest + SW |
@@ -29,6 +32,48 @@ texto, marcador de página e memória de onde você parou.
 | Exportar o livro em EPUB ou Markdown, com a página anotada | leitor |
 | OCR de página digitalizada, no próprio aparelho | leitor, modo Texto |
 | Equação destacada vira recorte da folha, em vez de texto embaralhado | modo Texto |
+| Interface em 6 idiomas, com seletor à mão | toda tela |
+
+### Idiomas
+
+Inglês (padrão e fallback), português do Brasil, espanhol, francês, alemão e
+italiano. O idioma sai, nesta ordem, do cookie `neko_lang` (a escolha da
+pessoa), do `Accept-Language` do navegador (o palpite) e do padrão.
+
+Quem resolve é o **servidor**, no `layout.tsx`, uma vez por pedido: é isso que
+faz o `<html lang>`, o `<title>`, o manifest do PWA e o texto da landing já
+nascerem certos, sem o lampejo de inglês que uma troca no cliente daria. O
+dicionário do idioma escolhido desce como prop pro `I18nProvider`, então o
+navegador baixa **um** idioma, não seis.
+
+```
+src/lib/i18n/
+  config.ts              locales, cookie, detecção, idiomas do OCR
+  servidor.ts            localeAtual() / i18nAtual() — só no servidor
+  cliente.tsx            I18nProvider, useT, useI18n, useTrocarIdioma
+  formato.ts             fmt("{n} de {total}") e plural() via Intl.PluralRules
+  dicionarios/
+    en.ts                a referência: as chaves saem daqui
+    tipo.ts              alarga os literais do en pra `string`
+    pt-BR.ts es.ts fr.ts de.ts it.ts
+```
+
+O `en.ts` é a fonte da verdade do **formato**: `Dicionario` é o tipo dele com os
+literais alargados, então uma chave nova quebra o `tsc` nos outros cinco
+arquivos até ser preenchida. Tradução faltando é erro de compilação, não uma
+tela pela metade.
+
+Duas regras que valem a pena lembrar ao mexer:
+
+- **Frase inteira no dicionário, nunca pedaço.** "na página" e "no capítulo" são
+  entradas separadas porque a preposição muda com o gênero em português e o caso
+  muda em alemão; montar `"n" + artigo + nome` só funciona numa língua.
+- **Contagem usa `{ one, other }`** e passa pelo `plural()`, que consulta o
+  `Intl.PluralRules` do idioma — o francês trata 0 como singular, o inglês não.
+
+O OCR acompanha: `IDIOMAS_OCR` mapeia cada idioma pro dicionário do tesseract
+(`por+eng`, `deu+eng`…), sempre com inglês junto, porque livro técnico em
+qualquer língua vem cheio de termo e nome próprio em inglês.
 
 ### Como o livro se chama
 
@@ -153,6 +198,7 @@ Depois do primeiro deploy, volte no Supabase e adicione a URL da Vercel em
 src/
   proxy.ts                     guarda de rota + refresh de sessão (Next 16)
   lib/
+    i18n/                      idiomas (ver "Idiomas" acima)
     supabase/{client,server,session}.ts
     pdf.ts                     worker do pdf.js, nº de páginas e capa
     pdf-blocos.ts              remontagem: linha → parágrafo, título, tabela, fórmula
@@ -163,18 +209,23 @@ src/
     types.ts                   Book, Highlight, Bookmark, Rect, cores
   app/
     globals.css                paleta, grão, estilo das marcações
-    manifest.ts                manifest do PWA
+    layout.tsx                 resolve o idioma e monta o I18nProvider
+    manifest.ts                manifest do PWA, no idioma do pedido
     icons/[size]/route.tsx     ícones 180/192/512 gerados (next/og)
+    page.tsx                   landing (pública; logado é mandado pra /library)
     login/                     entrar / criar conta (senha + confirmação)
-    esqueci/                   pedir link de recuperação
-    nova-senha/                trocar a senha depois do link
+    forgot/                    pedir link de recuperação
+    new-password/              trocar a senha depois do link
     auth/callback              confirma e-mail e troca `code` por sessão
     auth/signout               sair
-    page.tsx                   estante
-    livro/[id]/page.tsx        livro + URL assinada + marcações
+    library/page.tsx           estante
+    book/[id]/page.tsx         livro + URL assinada + marcações
+    book/[id]/notes/page.tsx   marcações em página inteira
   components/
     ui.tsx                     Campo, Botao, Aviso (alvos de 48px)
     auth-shell.tsx             moldura das telas de conta
+    seletor-idioma.tsx         troca de idioma (<select> nativo)
+    pagina-demo.tsx            o desenho da página marcada, na landing
     uploader.tsx               upload com capa gerada no cliente
     book-card.tsx              capa com lombada + progresso
     reader.tsx                 barras, painel, folhas, persistência

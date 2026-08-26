@@ -3,6 +3,8 @@
 import type { createClient } from "@/lib/supabase/client";
 import type { Book } from "@/lib/types";
 
+import { ERRO, ErroApp } from "@/lib/erros";
+
 type Supabase = ReturnType<typeof createClient>;
 
 const LADO_MAX = 900;
@@ -22,10 +24,10 @@ export async function trocarCapa(
   arquivo: File,
 ): Promise<string> {
   if (!arquivo.type.startsWith("image/")) {
-    throw new Error("Escolha um arquivo de imagem.");
+    throw new ErroApp(ERRO.capaNaoImagem);
   }
   if (arquivo.size > TAMANHO_MAX) {
-    throw new Error("Imagem muito grande (máx. 12 MB).");
+    throw new ErroApp(ERRO.capaGrande, "12 MB");
   }
 
   const jpeg = await reduzirParaJpeg(arquivo);
@@ -68,7 +70,7 @@ async function reduzirParaJpeg(arquivo: File): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     bitmap.close();
-    throw new Error("Não consegui processar a imagem.");
+    throw new ErroApp(ERRO.capaFalhou);
   }
   ctx.drawImage(bitmap, 0, 0, largura, altura);
   bitmap.close();
@@ -76,6 +78,6 @@ async function reduzirParaJpeg(arquivo: File): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/jpeg", 0.85),
   );
-  if (!blob) throw new Error("Não consegui processar a imagem.");
+  if (!blob) throw new ErroApp(ERRO.capaFalhou);
   return blob;
 }
