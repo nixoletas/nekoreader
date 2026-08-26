@@ -167,9 +167,9 @@ export default async function LandingPage() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-7 text-sm text-muted sm:px-8">
           <span className="display text-foreground">{d.brand.name}</span>
           <span>{d.landing.footerRights}</span>
-          <span className="ml-auto">
+          <div className="ml-auto">
             <SeletorIdioma />
-          </span>
+          </div>
         </div>
       </footer>
     </div>
