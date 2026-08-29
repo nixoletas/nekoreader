@@ -12,16 +12,35 @@
    ============================================================ */
 
 :root {
-  --paper: #f4eee2;
-  --surface: #fffdf7;
-  --line: #e0d5c0;
+  /* O tom é o do miolo de best-seller de banca — pólen soft, não papel de
+     escritório. Um leitor de livros que abre branco parece um editor de texto;
+     este creme é a primeira coisa que diz o que o app é, antes de qualquer
+     palavra da landing.
+
+     `--surface` é o degrau acima do papel, para o que precisa levantar da folha
+     (cartão, barra, campo). Também não é branco: branco sobre creme lê como
+     erro de tema, e não como hierarquia. */
+  --paper: #f0e7d5;
+  --surface: #faf5ea;
+  --line: #ddd0b5;
   --ink: #211c16;
-  --ink-soft: #726755;
+  /* Escurecido junto com o papel: sobre um creme mais fundo, o cinza de antes
+     caía abaixo do mínimo de contraste para texto corrido. */
+  --ink-soft: #6b5f4c;
   --accent: #a33f27;
   --accent-soft: #c8734f;
   --gold: #b78a34;
-  --grain: rgba(33, 28, 22, 0.035);
+  --grain: rgba(33, 28, 22, 0.04);
   --shadow: 0 1px 2px rgba(60, 45, 25, 0.06), 0 8px 24px -12px rgba(60, 45, 25, 0.28);
+
+  /* A contracapa: o bloco que fecha a landing. Escuro nos dois temas — é o único
+     lugar da interface que não acompanha a troca, porque ali ele não é "fundo da
+     página", é objeto sobre a página, como a capa dura de um livro apoiada na
+     mesa. Invertê-lo no tema escuro o faria sumir justamente onde ele precisa
+     encerrar a leitura. */
+  --capa: #2b231a;
+  --capa-ink: #f3ead7;
+  --capa-ink-soft: #b8ab93;
 
   /* O que o navegador desenha por conta própria — menu de <select>, barra de
      rolagem, calendário — segue o tema escolhido. Sem isto, o menu do seletor de

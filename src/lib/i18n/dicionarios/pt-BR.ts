@@ -357,12 +357,15 @@ export const ptBR: Dicionario = {
       "Abra um PDF ou EPUB, marque os trechos que importam e continue em qualquer aparelho exatamente de onde parou.",
     navSignIn: "Entrar",
     navStart: "Começar a ler",
-    heroTitle: "Leia seus livros. Guarde o que importa.",
+    heroTitle: "O leitor de livros definitivo",
     heroLead:
-      "Junte seus PDFs e EPUBs num lugar só, marque os trechos que você quer lembrar e abra o mesmo livro no celular bem onde você parou no computador.",
+      "Converta PDFs e EPUBs complicados em texto bonito, que reflui e aceita marcação. Faça anotações e sincronize entre seus aparelhos.",
     heroCta: "Começar a ler — é de graça",
-    heroNote: "Funciona no navegador. Não instala nada.",
-    heroAlt: "Uma página de livro com dois trechos marcados e uma nota na margem",
+    heroNote: "Web e PWA — simples, fácil.",
+    heroAltWeb: "O leitor no computador, com um trecho marcado e o painel de notas aberto",
+    heroAltCelular: "O mesmo livro aberto no celular",
+    shelfAltWeb: "A estante no computador, com as capas, o progresso de leitura e um livro pra continuar",
+    shelfAltCelular: "A mesma estante no celular",
     stepsTitle: "Como funciona",
     steps: [
       {

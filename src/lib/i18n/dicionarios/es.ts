@@ -357,12 +357,15 @@ export const es: Dicionario = {
       "Abre un PDF o EPUB, marca los fragmentos que importan y sigue en cualquier dispositivo justo donde lo dejaste.",
     navSignIn: "Entrar",
     navStart: "Empezar a leer",
-    heroTitle: "Lee tus libros. Guarda lo que importa.",
+    heroTitle: "El lector de libros definitivo",
     heroLead:
-      "Reúne tus PDFs y EPUBs en un solo sitio, marca los fragmentos que quieres recordar y abre el mismo libro en el móvil justo donde lo dejaste en el ordenador.",
+      "Convierte PDFs y EPUBs complicados en un texto bonito, que se adapta a la pantalla y admite subrayado. Toma notas y sincroniza entre tus dispositivos.",
     heroCta: "Empezar a leer — es gratis",
-    heroNote: "Funciona en el navegador. No instalas nada.",
-    heroAlt: "Una página de libro con dos fragmentos marcados y una nota al margen",
+    heroNote: "Web y PWA — simple, fácil.",
+    heroAltWeb: "El lector en el ordenador, con un fragmento subrayado y el panel de notas abierto",
+    heroAltCelular: "El mismo libro abierto en el móvil",
+    shelfAltWeb: "La estantería en el ordenador, con las portadas, el progreso de lectura y un libro para seguir",
+    shelfAltCelular: "La misma estantería en el móvil",
     stepsTitle: "Cómo funciona",
     steps: [
       {

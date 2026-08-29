@@ -225,7 +225,7 @@ src/
     ui.tsx                     Campo, Botao, Aviso (alvos de 48px)
     auth-shell.tsx             moldura das telas de conta
     seletor-idioma.tsx         troca de idioma (<select> nativo)
-    pagina-demo.tsx            o desenho da página marcada, na landing
+    prints-app.tsx             as duas telas do app (computador + celular), na landing
     uploader.tsx               upload com capa gerada no cliente
     book-card.tsx              capa com lombada + progresso
     reader.tsx                 barras, painel, folhas, persistência

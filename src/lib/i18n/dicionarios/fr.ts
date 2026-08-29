@@ -357,12 +357,15 @@ export const fr: Dicionario = {
       "Ouvrez un PDF ou un EPUB, marquez les passages qui comptent et reprenez sur n'importe quel appareil exactement là où vous vous êtes arrêté.",
     navSignIn: "Se connecter",
     navStart: "Commencer à lire",
-    heroTitle: "Lisez vos livres. Gardez ce qui compte.",
+    heroTitle: "Le lecteur de livres définitif",
     heroLead:
-      "Réunissez vos PDF et vos EPUB au même endroit, marquez les passages dont vous voulez vous souvenir, et ouvrez le même livre sur votre téléphone là où vous l'aviez laissé sur l'ordinateur.",
+      "Convertissez des PDF et des EPUB complexes en un texte élégant, qui se recompose et se surligne. Prenez des notes et synchronisez-les entre vos appareils.",
     heroCta: "Commencer à lire — c'est gratuit",
-    heroNote: "Fonctionne dans le navigateur. Rien à installer.",
-    heroAlt: "Une page de livre avec deux passages marqués et une note dans la marge",
+    heroNote: "Web et PWA — simple, facile.",
+    heroAltWeb: "Le lecteur sur un ordinateur, avec un passage surligné et le panneau de notes ouvert",
+    heroAltCelular: "Le même livre ouvert sur un téléphone",
+    shelfAltWeb: "La bibliothèque sur un ordinateur, avec les couvertures, la progression et un livre à reprendre",
+    shelfAltCelular: "La même bibliothèque sur un téléphone",
     stepsTitle: "Comment ça marche",
     steps: [
       {

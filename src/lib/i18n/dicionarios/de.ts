@@ -357,12 +357,15 @@ export const de: Dicionario = {
       "Öffne ein PDF oder EPUB, markiere die Stellen, auf die es ankommt, und lies auf jedem Gerät genau dort weiter, wo du aufgehört hast.",
     navSignIn: "Anmelden",
     navStart: "Loslesen",
-    heroTitle: "Lies deine Bücher. Behalte, was zählt.",
+    heroTitle: "Der ultimative Buchleser",
     heroLead:
-      "Sammle deine PDFs und EPUBs an einem Ort, markiere die Stellen, die du behalten willst, und öffne dasselbe Buch auf dem Handy genau dort, wo du am Rechner aufgehört hast.",
+      "Verwandle komplexe PDFs und EPUBs in schönen Text, der umbricht und sich markieren lässt. Mach Notizen und synchronisiere sie zwischen deinen Geräten.",
     heroCta: "Loslesen — kostenlos",
-    heroNote: "Läuft im Browser. Nichts zu installieren.",
-    heroAlt: "Eine Buchseite mit zwei markierten Stellen und einer Notiz am Rand",
+    heroNote: "Web & PWA — einfach, unkompliziert.",
+    heroAltWeb: "Der Reader auf dem Rechner, mit einer markierten Stelle und der geöffneten Notizenspalte",
+    heroAltCelular: "Dasselbe Buch auf dem Handy geöffnet",
+    shelfAltWeb: "Das Bücherregal auf dem Rechner, mit den Covern, dem Lesefortschritt und einem Buch zum Weiterlesen",
+    shelfAltCelular: "Dasselbe Bücherregal auf dem Handy",
     stepsTitle: "So läuft es",
     steps: [
       {

@@ -357,12 +357,15 @@ export const it: Dicionario = {
       "Apri un PDF o un EPUB, segna i passi che contano e riprendi su qualsiasi dispositivo esattamente da dove ti eri fermato.",
     navSignIn: "Accedi",
     navStart: "Comincia a leggere",
-    heroTitle: "Leggi i tuoi libri. Tieni quello che conta.",
+    heroTitle: "Il lettore di libri definitivo",
     heroLead:
-      "Metti i tuoi PDF e i tuoi EPUB in un posto solo, segna i passi che vuoi ricordare e apri lo stesso libro sul telefono proprio dove l'avevi lasciato sul computer.",
+      "Converti PDF ed EPUB complessi in un testo bello, che si adatta allo schermo e si lascia evidenziare. Prendi appunti e sincronizzali tra i tuoi dispositivi.",
     heroCta: "Comincia a leggere — è gratis",
-    heroNote: "Funziona nel browser. Non installi niente.",
-    heroAlt: "Una pagina di libro con due passi segnati e una nota a margine",
+    heroNote: "Web e PWA — semplice, facile.",
+    heroAltWeb: "Il lettore sul computer, con un passo evidenziato e il pannello delle note aperto",
+    heroAltCelular: "Lo stesso libro aperto sul telefono",
+    shelfAltWeb: "La libreria sul computer, con le copertine, i progressi di lettura e un libro da riprendere",
+    shelfAltCelular: "La stessa libreria sul telefono",
     stepsTitle: "Come funziona",
     steps: [
       {

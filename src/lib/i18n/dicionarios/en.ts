@@ -368,12 +368,15 @@ export const en = {
       "Open a PDF or EPUB, mark the passages that matter, and pick up on any device exactly where you stopped.",
     navSignIn: "Sign in",
     navStart: "Start reading",
-    heroTitle: "Read your books. Keep what matters.",
+    heroTitle: "The definitive Book Reader",
     heroLead:
-      "Put your PDFs and EPUBs in one place, mark the passages you want to remember, and open the same book on your phone right where you left it on your computer.",
+      "Convert complex PDFs and EPUBs into reflowable, markable, beautiful text. Take notes and sync between devices.",
     heroCta: "Start reading — it's free",
-    heroNote: "Works in your browser. Nothing to install.",
-    heroAlt: "A book page with two marked passages and a note in the margin",
+    heroNote: "Web & PWA — Simple, Easy.",
+    heroAltWeb: "The reader on a computer, with a highlighted passage and the notes panel open",
+    heroAltCelular: "The same book open on a phone",
+    shelfAltWeb: "The bookshelf on a computer, with covers, reading progress and a book to continue",
+    shelfAltCelular: "The same bookshelf on a phone",
     stepsTitle: "How it works",
     steps: [
       {
