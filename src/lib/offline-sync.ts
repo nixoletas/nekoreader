@@ -1,7 +1,13 @@
 "use client";
 
 import type { createClient } from "@/lib/supabase/client";
-import { enfileirar, listarFila, removerDaFila, type OpFila } from "@/lib/offline-db";
+import {
+  enfileirar,
+  listarFila,
+  marcarTentativa,
+  removerDaFila,
+  type OpFila,
+} from "@/lib/offline-db";
 import type { Bookmark, Highlight } from "@/lib/types";
 
 type Supabase = ReturnType<typeof createClient>;
@@ -25,6 +31,42 @@ function esquemaAusente(error: { code?: string }): boolean {
     error.code === "PGRST205"
   );
 }
+
+/**
+ * Esta operação nunca vai dar certo, por mais que se tente.
+ *
+ * O caso que importa: alguém apaga um livro num aparelho enquanto o outro ainda
+ * tem marcações dele na fila. O `insert` bate na chave estrangeira (23503) toda
+ * vez, e como a fila para no primeiro erro, tudo o que foi feito depois — em
+ * qualquer livro — fica preso atrás dela pra sempre, sem aviso nenhum.
+ *
+ * Descartar é a saída certa: a operação perdeu o objeto, e o resto da fila não
+ * tem nada a ver com isso.
+ *
+ * Só entram códigos que falam do **dado**, nunca de permissão: sessão vencida
+ * também devolve "não autorizado", e descartar por causa dela jogaria fora a
+ * marcação de alguém que só precisava entrar de novo. Esse caso fica pro teto de
+ * tentativas, que espera muito mais antes de desistir.
+ *
+ * 23503 chave estrangeira · 23514 check · 22P02/22003 valor inválido.
+ */
+function permanente(error: { code?: string }): boolean {
+  return (
+    error.code === "23503" ||
+    error.code === "23514" ||
+    error.code === "22P02" ||
+    error.code === "22003"
+  );
+}
+
+/**
+ * Teto de tentativas antes de desistir de uma operação.
+ *
+ * A lista de códigos acima cobre o que dá pra prever; isto cobre o resto. Vinte
+ * sincronizações seguidas falhando na mesma operação, enquanto o app claramente
+ * tem internet pra tentar, é uma operação quebrada — não uma rede instável.
+ */
+const TETO_TENTATIVAS = 20;
 
 async function executar(supabase: Supabase, op: OpFila): Promise<void> {
   switch (op.tipo) {
@@ -170,8 +212,14 @@ export async function mesclarFilaLocal(
 let sincronizando = false;
 
 /**
- * Esvazia a fila local no Supabase, em ordem de criação. Para no primeiro erro
- * (rede caiu de novo, por exemplo) — o resto fica guardado pra próxima tentativa.
+ * Esvazia a fila local no Supabase, em ordem de criação.
+ *
+ * Erro de rede para a sincronização — o resto fica guardado pra próxima vez, que
+ * é o comportamento certo pra quem só perdeu o sinal. O que **não** pode parar a
+ * fila é uma operação que nunca vai dar certo (`permanente`) ou que já falhou
+ * vezes demais: essa é descartada e a fila segue, senão uma marcação órfã
+ * seguraria pra sempre todo o progresso feito depois dela.
+ *
  * Reentrante-safe: só roda uma sincronização por vez.
  */
 export async function sincronizarFila(supabase: Supabase): Promise<void> {
@@ -183,7 +231,14 @@ export async function sincronizarFila(supabase: Supabase): Promise<void> {
       try {
         await executar(supabase, item.op);
         await removerDaFila(item.chave);
-      } catch {
+      } catch (e) {
+        const erro = (e ?? {}) as { code?: string };
+        const tentativas = (item.tentativas ?? 0) + 1;
+        if (permanente(erro) || tentativas >= TETO_TENTATIVAS) {
+          await removerDaFila(item.chave);
+          continue;
+        }
+        await marcarTentativa(item.chave, tentativas);
         break;
       }
     }

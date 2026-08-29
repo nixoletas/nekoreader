@@ -240,6 +240,7 @@ export const ptBR: Dicionario = {
 
   panel: {
     tabContents: "Sumário",
+    tabSearch: "Buscar",
     tabNotes: "Marcações {n}",
     tabPages: "Páginas {n}",
     tabChapters: "Capítulos {n}",
@@ -257,6 +258,31 @@ export const ptBR: Dicionario = {
     none: "Este livro não traz sumário — nem nos marcadores, nem nos títulos do texto.",
     failed: "Não consegui ler o sumário deste livro.",
     noPage: "Não deu pra descobrir em que página começa",
+  },
+
+  search: {
+    placeholder: "Procurar no livro",
+    clear: "Limpar",
+    hint: "Digite uma palavra ou uma frase pra encontrar no livro.",
+    tooShort: "Digite pelo menos duas letras.",
+    reading: "Abrindo o livro…",
+    scanning: "Lendo o livro… {pct}%",
+    scanNote: "O livro inteiro é lido uma vez, aqui no seu aparelho. A próxima busca é instantânea.",
+    count: { one: "{n} resultado", other: "{n} resultados" },
+    more: "Só os {n} primeiros estão na lista.",
+    none: "Nada encontrado para “{term}”.",
+    noText: "Não há texto pra procurar — este livro é digitalizado. Passe o OCR numa página, no modo Texto, e ela passa a ser encontrável.",
+    failed: "Não consegui procurar neste livro.",
+  },
+
+  errors: {
+    title: "Alguma coisa quebrou",
+    body: "Esta tela deu erro. Tentar de novo costuma resolver.",
+    retry: "Tentar de novo",
+    toShelf: "Voltar pros meus livros",
+    notFoundTitle: "Esta página não existe",
+    notFoundBody: "O link pode estar errado, ou o que ele apontava não está mais lá.",
+    home: "Ir pro começo",
   },
 
   highlight: {

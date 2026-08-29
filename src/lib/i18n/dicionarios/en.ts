@@ -250,6 +250,7 @@ export const en = {
 
   panel: {
     tabContents: "Contents",
+    tabSearch: "Search",
     tabNotes: "Notes {n}",
     tabPages: "Pages {n}",
     tabChapters: "Chapters {n}",
@@ -267,6 +268,33 @@ export const en = {
     none: "This book has no contents — not in the bookmarks, not in the headings either.",
     failed: "I couldn't read this book's contents.",
     noPage: "Couldn't work out what page this starts on",
+  },
+
+  search: {
+    placeholder: "Search in the book",
+    clear: "Clear",
+    hint: "Type a word or a phrase to find it in the book.",
+    tooShort: "Type at least two letters.",
+    reading: "Opening the book…",
+    /** Enquanto o livro e lido pela primeira vez. */
+    scanning: "Reading the book… {pct}%",
+    scanNote: "The whole book is read once, here on your device. The next search is instant.",
+    count: { one: "{n} result", other: "{n} results" },
+    more: "Only the first {n} are listed.",
+    none: "Nothing found for “{term}”.",
+    /** Livro digitalizado, sem camada de texto. */
+    noText: "There's no text to search here — this book is a scan. Run OCR on a page in Text mode and it becomes searchable.",
+    failed: "I couldn't search this book.",
+  },
+
+  errors: {
+    title: "Something went wrong",
+    body: "This screen hit an error. Trying again usually sorts it out.",
+    retry: "Try again",
+    toShelf: "Back to my books",
+    notFoundTitle: "This page doesn't exist",
+    notFoundBody: "The link may be wrong, or what it pointed to is gone.",
+    home: "Go to the start",
   },
 
   highlight: {

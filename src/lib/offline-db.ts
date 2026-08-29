@@ -13,7 +13,7 @@ import type { Bloco } from "@/lib/pdf-blocos";
  */
 
 const DB_NOME = "nekoreader-offline";
-const DB_VERSAO = 6;
+const DB_VERSAO = 7;
 const LOJA_PDFS = "pdfs";
 const LOJA_FILA = "fila";
 const LOJA_LIVROS = "livros";
@@ -22,6 +22,7 @@ const LOJA_SUMARIOS = "sumarios";
 const LOJA_ROTULOS = "rotulos";
 const LOJA_OCR = "ocr";
 const LOJA_PREVIAS = "previas";
+const LOJA_BUSCA = "busca";
 
 /**
  * O que o app deixou nos aparelhos quando ainda se chamava Marginália.
@@ -81,6 +82,9 @@ function abrirDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(LOJA_PREVIAS)) {
         db.createObjectStore(LOJA_PREVIAS, { keyPath: "bookId" });
+      }
+      if (!db.objectStoreNames.contains(LOJA_BUSCA)) {
+        db.createObjectStore(LOJA_BUSCA, { keyPath: "bookId" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -393,6 +397,73 @@ export async function obterOcr(
   return dado?.versao === VERSAO_OCR ? dado.blocos : undefined;
 }
 
+/**
+ * Todas as páginas deste livro que já passaram por OCR, de uma vez só.
+ *
+ * A chave da loja é `bookId#pagina`, então uma faixa sobre a chave primária
+ * pega o livro inteiro numa consulta. Ler página por página seriam centenas de
+ * idas ao IndexedDB durante a varredura da busca.
+ */
+export async function obterOcrDoLivro(bookId: string): Promise<Map<number, Bloco[]>> {
+  const db = await abrirDb();
+  const faixa = IDBKeyRange.bound(`${bookId}#`, `${bookId}#￿`);
+  const itens = await pedido(
+    db.transaction(LOJA_OCR, "readonly").objectStore(LOJA_OCR).getAll(faixa) as IDBRequest<
+      OcrGuardado[]
+    >,
+  );
+
+  const mapa = new Map<number, Bloco[]>();
+  for (const item of itens) {
+    if (item.versao !== VERSAO_OCR) continue;
+    const pagina = Number(item.chave.slice(item.chave.indexOf("#") + 1));
+    if (Number.isFinite(pagina)) mapa.set(pagina, item.blocos);
+  }
+  return mapa;
+}
+
+/* ================================================== Texto pra busca */
+/**
+ * O texto de cada página do livro, extraído uma vez pra a busca não precisar
+ * varrer o arquivo de novo a cada termo procurado.
+ *
+ * Só o texto, sem posição nem fonte: é o que cabe guardar de um livro de 700
+ * páginas e é tudo de que a busca precisa. `paginas[0]` é a página 1 do arquivo.
+ *
+ * Guardar aqui é o que torna a segunda busca instantânea — e é o que faz a busca
+ * continuar funcionando offline, quando não há como reabrir o PDF assinado.
+ */
+export type BuscaGuardada = {
+  bookId: string;
+  versao: number;
+  paginas: string[];
+  atualizadoEm: number;
+};
+
+/** Bumpar aqui joga fora o texto guardado quando a extração mudar. */
+export const VERSAO_BUSCA = 1;
+
+export async function salvarTextoBusca(bookId: string, paginas: string[]): Promise<void> {
+  const db = await abrirDb();
+  const dado: BuscaGuardada = {
+    bookId,
+    versao: VERSAO_BUSCA,
+    paginas,
+    atualizadoEm: Date.now(),
+  };
+  await pedido(db.transaction(LOJA_BUSCA, "readwrite").objectStore(LOJA_BUSCA).put(dado));
+}
+
+export async function obterTextoBusca(bookId: string): Promise<string[] | undefined> {
+  const db = await abrirDb();
+  const dado = await pedido(
+    db.transaction(LOJA_BUSCA, "readonly").objectStore(LOJA_BUSCA).get(bookId) as IDBRequest<
+      BuscaGuardada | undefined
+    >,
+  );
+  return dado?.versao === VERSAO_BUSCA ? dado.paginas : undefined;
+}
+
 /* ============================================== Fila de sincronização */
 
 export type OpFila =
@@ -421,25 +492,56 @@ export type OpFila =
   | { tipo: "bookmark_add"; row: Record<string, unknown> }
   | { tipo: "bookmark_del"; id: string };
 
-export type ItemFila = { chave: string; op: OpFila; criadoEm: number };
+export type ItemFila = {
+  chave: string;
+  op: OpFila;
+  criadoEm: number;
+  /**
+   * Sincronizações seguidas em que esta operação falhou. Item antigo não tem o
+   * campo — quem lê trata `undefined` como zero.
+   *
+   * Existe pra que uma operação que nunca vai dar certo não segure a fila pra
+   * sempre: passado o teto, ela é descartada. Ver `sincronizarFila`.
+   */
+  tentativas?: number;
+};
 
 /**
  * Enfileira (ou substitui, se a `chave` já existir) uma alteração pendente.
  * A chave é o que permite "coalescer": salvar a página de novo a cada virada
  * enquanto offline não empilha dezenas de updates, só substitui o mesmo item.
+ *
+ * O contador só sobe quando a chave é nova — substituir um item não acrescenta
+ * pendência nenhuma, e contar como se acrescentasse fazia o leitor anunciar
+ * "12 alterações pra sincronizar" com uma só esperando.
  */
 export async function enfileirar(chave: string, op: OpFila): Promise<void> {
   const db = await abrirDb();
-  const item: ItemFila = { chave, op, criadoEm: Date.now() };
-  await pedido(db.transaction(LOJA_FILA, "readwrite").objectStore(LOJA_FILA).put(item));
-  contagemFila += 1;
+  const loja = db.transaction(LOJA_FILA, "readwrite").objectStore(LOJA_FILA);
+  const anterior = await pedido(loja.get(chave) as IDBRequest<ItemFila | undefined>);
+  // Operação nova na mesma chave recomeça a contagem de tentativas: o que falhou
+  // antes foi outro conteúdo.
+  const item: ItemFila = { chave, op, criadoEm: anterior?.criadoEm ?? Date.now(), tentativas: 0 };
+  await pedido(loja.put(item));
+  if (!anterior) contagemFila += 1;
   avisarOuvintes();
+}
+
+/** Guarda quantas vezes esta operação já falhou, sem mexer na ordem da fila. */
+export async function marcarTentativa(chave: string, tentativas: number): Promise<void> {
+  const db = await abrirDb();
+  const loja = db.transaction(LOJA_FILA, "readwrite").objectStore(LOJA_FILA);
+  const item = await pedido(loja.get(chave) as IDBRequest<ItemFila | undefined>);
+  if (!item) return;
+  await pedido(loja.put({ ...item, tentativas }));
 }
 
 export async function removerDaFila(chave: string): Promise<void> {
   const db = await abrirDb();
-  await pedido(db.transaction(LOJA_FILA, "readwrite").objectStore(LOJA_FILA).delete(chave));
-  contagemFila = Math.max(0, contagemFila - 1);
+  const loja = db.transaction(LOJA_FILA, "readwrite").objectStore(LOJA_FILA);
+  const existia = await pedido(loja.count(chave));
+  await pedido(loja.delete(chave));
+  if (existia) contagemFila = Math.max(0, contagemFila - 1);
   avisarOuvintes();
 }
 

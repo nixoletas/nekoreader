@@ -8,6 +8,7 @@ import { Clock, MonitorSmartphone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import BotaoTema from "@/components/botao-tema";
 import { limparTudoOffline, obterSnapshotEstante, salvarSnapshotEstante } from "@/lib/offline-db";
+import { sincronizarFila } from "@/lib/offline-sync";
 import { useOnline } from "@/lib/use-offline";
 import { useRotulos } from "@/lib/use-rotulos";
 import { rotuloDaPagina } from "@/lib/pdf-rotulos";
@@ -108,6 +109,37 @@ function OndeParou({
   );
 }
 
+/**
+ * Quantas marcações cada livro tem.
+ *
+ * Pela função do banco, que devolve uma linha por livro. O jeito antigo — trazer
+ * `book_id` de **toda** marcação da conta e contar aqui — cresce sem teto: quem
+ * marca muito acaba baixando dezenas de milhares de linhas pra desenhar um
+ * numerozinho no cartão.
+ *
+ * Banco que ainda não rodou a migração não tem a função, e aí vale o caminho
+ * antigo — mesma escolha já feita com a `reading_positions` logo acima.
+ */
+async function contarMarcacoes(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Map<string, number>> {
+  const mapa = new Map<string, number>();
+
+  const { data, error } = await supabase.rpc("contagem_marcacoes");
+  if (!error) {
+    (data as { book_id: string; total: number }[] | null)?.forEach((linha) =>
+      mapa.set(linha.book_id, Number(linha.total)),
+    );
+    return mapa;
+  }
+
+  const { data: hl } = await supabase.from("highlights").select("book_id");
+  (hl as { book_id: string }[] | null)?.forEach((h) =>
+    mapa.set(h.book_id, (mapa.get(h.book_id) ?? 0) + 1),
+  );
+  return mapa;
+}
+
 export default function Estante() {
   const router = useRouter();
   const { d, p, locale } = useI18n();
@@ -139,6 +171,11 @@ export default function Estante() {
       return;
     }
     setEmail(session.user.email ?? null);
+
+    // O que foi feito offline sobe aqui também. Antes isto só acontecia dentro do
+    // leitor: quem lia no celular sem sinal e depois abria só a estante no
+    // computador ficava com a fila cheia sem nenhum momento pra esvaziá-la.
+    if (navigator.onLine) await sincronizarFila(supabase);
 
     try {
       const { data: livrosDb, error } = await supabase
@@ -180,12 +217,7 @@ export default function Estante() {
       });
       setPosicoes(mapaPosicoes);
 
-      const { data: hl } = await supabase.from("highlights").select("book_id");
-      const mapaContagem = new Map<string, number>();
-      (hl as { book_id: string }[] | null)?.forEach((h) =>
-        mapaContagem.set(h.book_id, (mapaContagem.get(h.book_id) ?? 0) + 1),
-      );
-      setContagem(mapaContagem);
+      setContagem(await contarMarcacoes(supabase));
     } catch (e) {
       if (navigator.onLine) {
         // Online mas falhou mesmo assim — não é a hora de mostrar dado velho

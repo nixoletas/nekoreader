@@ -22,6 +22,7 @@ import {
   Pencil,
   Plus,
   ScrollText,
+  Search,
   StickyNote,
   Sun,
   Trash2,
@@ -40,6 +41,8 @@ import { textoDoErro } from "@/lib/erros";
 import type { Dicionario } from "@/lib/i18n/dicionarios";
 import SeletorIdioma from "@/components/seletor-idioma";
 import { useSumario, type EstadoSumario } from "@/lib/use-sumario";
+import { useBusca, type EstadoBusca } from "@/lib/use-busca";
+import { MIN_TERMO } from "@/lib/busca";
 import { useRotulos } from "@/lib/use-rotulos";
 import { numeracaoPropria, paginaDoRotulo, rotuloDaPagina, type Rotulos } from "@/lib/pdf-rotulos";
 import { Botao } from "@/components/ui";
@@ -87,7 +90,7 @@ const EpubText = dynamic(() => import("./epub-text"), {
   ),
 });
 
-type Aba = "marcacoes" | "paginas" | "sumario";
+type Aba = "marcacoes" | "paginas" | "sumario" | "busca";
 type Sheet = null | "painel" | "ir";
 type Modo = "pagina" | "texto";
 
@@ -627,6 +630,13 @@ function ReaderCarregado({
       if (e.key === "ArrowRight" || e.key === "PageDown") irPara(page + 1);
       if (e.key === "ArrowLeft" || e.key === "PageUp") irPara(page - 1);
       if (e.key === "Escape") setSheet(null);
+      // "/" é o atalho de procurar em toda parte — e a guarda acima já garante
+      // que digitar uma barra dentro de um campo continua digitando uma barra.
+      if (e.key === "/") {
+        e.preventDefault();
+        setAba("busca");
+        setSheet("painel");
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -765,6 +775,12 @@ function ReaderCarregado({
   // sabem a página, montar exige varrer o texto inteiro.
   const sumario = useSumario(book.id, fileUrl, book.format, aba === "sumario");
 
+  // O termo mora aqui, e não no painel, porque o painel existe duas vezes na
+  // árvore (barra lateral no computador, folha no celular): guardado lá dentro,
+  // cada um teria o seu, e o que foi digitado sumiria ao virar o celular.
+  const [termoBusca, setTermoBusca] = useState("");
+  const busca = useBusca(book.id, fileUrl, book.format, aba === "busca", termoBusca);
+
 
   const painel = (
     <Painel
@@ -773,6 +789,9 @@ function ReaderCarregado({
       highlights={highlights}
       bookmarks={bookmarks}
       sumario={sumario}
+      busca={busca}
+      termoBusca={termoBusca}
+      setTermoBusca={setTermoBusca}
       pagina={page}
       eEpub={eEpub}
       numero={rotulo}
@@ -1337,6 +1356,9 @@ function Painel({
   highlights,
   bookmarks,
   sumario,
+  busca,
+  termoBusca,
+  setTermoBusca,
   pagina,
   eEpub,
   numero,
@@ -1352,6 +1374,9 @@ function Painel({
   highlights: Highlight[];
   bookmarks: Bookmark[];
   sumario: EstadoSumario;
+  busca: EstadoBusca;
+  termoBusca: string;
+  setTermoBusca: (t: string) => void;
   pagina: number;
   /** No EPUB o que avança é capítulo: muda o nome de tudo, não o número. */
   eEpub: boolean;
@@ -1369,7 +1394,19 @@ function Painel({
 
   return (
     <>
-      <div className="grid shrink-0 grid-cols-3 gap-1 border-b border-border p-2">
+      {/* A busca é só o ícone: com quatro rótulos escritos, "Marcações 12" e
+          "Capítulos 3" não cabem lado a lado num celular de 320px. */}
+      <div className="grid shrink-0 grid-cols-[auto_1fr_1fr_1fr] gap-1 border-b border-border p-2">
+        <button
+          onClick={() => setAba("busca")}
+          aria-label={d.panel.tabSearch}
+          title={d.panel.tabSearch}
+          className={`tap rounded-xl px-2.5 transition ${
+            aba === "busca" ? "bg-accent/10 text-accent" : "text-muted hover:text-foreground"
+          }`}
+        >
+          <Search className="mx-auto h-4 w-4" aria-hidden />
+        </button>
         {(
           [
             ["sumario", d.panel.tabContents],
@@ -1395,7 +1432,16 @@ function Painel({
       </div>
 
       <div className="safe-b flex-1 overflow-y-auto">
-        {aba === "sumario" ? (
+        {aba === "busca" ? (
+          <Busca
+            estado={busca}
+            termo={termoBusca}
+            setTermo={setTermoBusca}
+            eEpub={eEpub}
+            numero={numero}
+            onIr={onIr}
+          />
+        ) : aba === "sumario" ? (
           <Sumario estado={sumario} pagina={pagina} numero={numero} onIr={onIr} />
         ) : aba === "marcacoes" ? (
           highlights.length === 0 ? (
@@ -1772,6 +1818,131 @@ function CampoPagina({
       }
       className={className}
     />
+  );
+}
+
+/**
+ * Procurar dentro do livro.
+ *
+ * O campo fica sempre visível, mesmo enquanto o livro é lido pela primeira vez:
+ * dá pra digitar o termo enquanto a barra de progresso corre, e a lista aparece
+ * assim que a leitura acaba. Esconder o campo faria a espera parecer um erro.
+ *
+ * A ocorrência é mostrada como o livro escreveu — com acento e maiúscula —,
+ * ainda que tenha sido achada pela forma sem acento. É o que deixa a pessoa
+ * reconhecer a frase de que se lembra.
+ */
+function Busca({
+  estado,
+  termo,
+  setTermo,
+  eEpub,
+  numero,
+  onIr,
+}: {
+  estado: EstadoBusca;
+  termo: string;
+  setTermo: (t: string) => void;
+  eEpub: boolean;
+  /** Página do arquivo → número como o livro imprime. */
+  numero: (p: number) => string;
+  onIr: (p: number) => void;
+}) {
+  const { d, t, p } = useI18n();
+  const { achados, cortado, progresso, carregando, semTexto, erro } = estado;
+  const limpo = termo.trim();
+  const unidade = eEpub ? d.unit.chapterCap : d.unit.pageCap;
+
+  const corpo = () => {
+    if (erro) {
+      return (
+        <Vazio>
+          {d.search.failed} {erro}
+        </Vazio>
+      );
+    }
+
+    if (carregando) {
+      return (
+        <div className="px-4 py-10 text-center text-sm text-muted">
+          <p>
+            {progresso === null
+              ? d.search.reading
+              : t(d.search.scanning, { pct: Math.round(progresso * 100) })}
+          </p>
+          <div className="mx-auto mt-3 h-1 w-40 overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full bg-accent transition-[width] duration-300"
+              style={{ width: `${Math.round((progresso ?? 0.06) * 100)}%` }}
+            />
+          </div>
+          {progresso !== null && <p className="mt-3 text-xs">{d.search.scanNote}</p>}
+        </div>
+      );
+    }
+
+    if (semTexto) return <Vazio>{d.search.noText}</Vazio>;
+    if (!limpo) return <Vazio>{d.search.hint}</Vazio>;
+    if (limpo.length < MIN_TERMO) return <Vazio>{d.search.tooShort}</Vazio>;
+    if (!achados) return <Vazio>{d.search.hint}</Vazio>;
+    if (!achados.length) return <Vazio>{t(d.search.none, { term: limpo })}</Vazio>;
+
+    return (
+      <>
+        <p className="px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+          {p(d.search.count, achados.length)}
+          {cortado ? ` · ${t(d.search.more, { n: achados.length })}` : ""}
+        </p>
+        <ul className="divide-y divide-border">
+          {achados.map((a, i) => (
+            <li key={`${a.pagina}-${i}`}>
+              <button
+                onClick={() => onIr(a.pagina)}
+                className="block w-full px-3 py-2.5 text-left transition active:bg-background"
+              >
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+                  {unidade} {numero(a.pagina)}
+                </span>
+                <span className="mt-0.5 block text-[13px] leading-snug">
+                  {a.antes}
+                  <mark className="rounded bg-[var(--gold)]/45 px-0.5 text-foreground">
+                    {a.casado}
+                  </mark>
+                  {a.depois}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  };
+
+  return (
+    <>
+      {/* Gruda no topo: com trezentas ocorrências, rolar a lista não pode
+          levar embora o campo em que se digita. */}
+      <div className="sticky top-0 z-10 border-b border-border bg-surface p-2">
+        <label className="relative block">
+          <span className="sr-only">{d.search.placeholder}</span>
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            placeholder={d.search.placeholder}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="h-11 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-base outline-none transition placeholder:text-muted/60 focus:border-accent focus:ring-4 focus:ring-accent/12"
+          />
+        </label>
+      </div>
+      <div className="flex-1">{corpo()}</div>
+    </>
   );
 }
 

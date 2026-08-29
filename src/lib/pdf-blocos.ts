@@ -1081,7 +1081,14 @@ function juntarParagrafos(
 }
 
 /** Hífen no fim da linha: comum (-), tipográfico (‐ ‑) ou opcional (­). */
-const HIFEN_FINAL = /[A-Za-zÀ-ÿ]([-‐‑­])$/;
+/**
+ * Palavra cortada no fim da linha. O grupo é o traço, porque ele decide o que
+ * fazer: hífen tipográfico é sempre quebra, hífen comum pode ser palavra composta.
+ *
+ * Exportado porque a busca (`busca.ts`) precisa juntar as mesmas linhas com a
+ * mesma regra — procurar "continuação" tem que achar "conti-" + "nuação".
+ */
+export const HIFEN_FINAL = /[A-Za-zÀ-ÿ]([-‐‑­])$/;
 
 /** A seta que abre a seção é desenho, não palavra — sai do texto do título. */
 function semMarcador(texto: string): string {

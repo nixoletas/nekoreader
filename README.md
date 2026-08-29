@@ -23,6 +23,7 @@ Domínio: **nekoreader.com**
 | "Continuar lendo" com a página exata | `/library` |
 | Leitor com zoom, ← →, deslizar o dedo, ir pra página | `/book/[id]` |
 | Marcar texto em 4 cores; tocar na marcação pra apagar | `/book/[id]` |
+| Procurar uma palavra no livro inteiro, sem acento e sem caixa | painel |
 | Marcar página (★) e lista de páginas guardadas | painel |
 | Salva a última página lida sozinho (debounce 700ms) | automático |
 | Instalável no celular (PWA, standalone, ícone próprio) | manifest + SW |

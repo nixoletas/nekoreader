@@ -240,6 +240,7 @@ export const fr: Dicionario = {
 
   panel: {
     tabContents: "Sommaire",
+    tabSearch: "Chercher",
     tabNotes: "Notes {n}",
     tabPages: "Pages {n}",
     tabChapters: "Chapitres {n}",
@@ -257,6 +258,31 @@ export const fr: Dicionario = {
     none: "Ce livre n'a pas de sommaire — ni dans les signets, ni dans les titres du texte.",
     failed: "Je n'ai pas pu lire le sommaire de ce livre.",
     noPage: "Impossible de savoir à quelle page cela commence",
+  },
+
+  search: {
+    placeholder: "Chercher dans le livre",
+    clear: "Effacer",
+    hint: "Tapez un mot ou une phrase à retrouver dans le livre.",
+    tooShort: "Tapez au moins deux lettres.",
+    reading: "Ouverture du livre…",
+    scanning: "Lecture du livre… {pct} %",
+    scanNote: "Le livre entier est lu une fois, ici sur votre appareil. La recherche suivante est instantanée.",
+    count: { one: "{n} résultat", other: "{n} résultats" },
+    more: "Seuls les {n} premiers sont listés.",
+    none: "Rien trouvé pour « {term} ».",
+    noText: "Il n'y a pas de texte à chercher : ce livre est un scan. Lancez l'OCR sur une page, en mode Texte, et elle devient trouvable.",
+    failed: "Je n'ai pas pu chercher dans ce livre.",
+  },
+
+  errors: {
+    title: "Quelque chose a cassé",
+    body: "Cet écran a rencontré une erreur. Réessayer suffit le plus souvent.",
+    retry: "Réessayer",
+    toShelf: "Retour à mes livres",
+    notFoundTitle: "Cette page n'existe pas",
+    notFoundBody: "Le lien est peut-être faux, ou ce qu'il visait n'est plus là.",
+    home: "Aller au début",
   },
 
   highlight: {

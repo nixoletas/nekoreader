@@ -73,6 +73,40 @@ async function baixar(
 }
 
 /**
+ * O texto de cada capítulo, pra busca.
+ *
+ * Aqui não passa pelos blocos de propósito: `blocosDoEpub` tira as imagens do
+ * zip e cria um object URL pra cada uma, e quem chama vira dono de revogar. Pra
+ * procurar, imagem não serve pra nada — `textContent` do capítulo dá o texto
+ * inteiro sem nada pra limpar depois.
+ *
+ * `paginas[0]` é o capítulo 1, do mesmo jeito que no PDF é a página 1: o resto
+ * do app já trata capítulo de EPUB como página, sem caso especial.
+ */
+export async function varrerTextoEpub(
+  epub: EpubAberto,
+  { aoProgredir, sinal }: { aoProgredir?: (fracao: number) => void; sinal?: AbortSignal } = {},
+): Promise<{ paginas: string[]; completo: boolean }> {
+  const analisar = analisadorDoNavegador();
+  const paginas: string[] = [];
+
+  for (let i = 0; i < epub.capitulos.length; i++) {
+    if (sinal?.aborted) return { paginas, completo: false };
+    try {
+      const bruto = await epub.lerTexto(epub.capitulos[i].href);
+      const doc = bruto ? analisar(bruto, "xhtml") : null;
+      paginas.push(doc?.body?.textContent ?? "");
+    } catch {
+      // Capítulo quebrado entra vazio — não derruba a leitura dos outros.
+      paginas.push("");
+    }
+    aoProgredir?.((i + 1) / epub.capitulos.length);
+  }
+
+  return { paginas, completo: true };
+}
+
+/**
  * Blocos de um capítulo, com as imagens do zip já viradas em object URL.
  *
  * Quem chama vira dono das URLs e precisa revogar quando descartar os blocos —

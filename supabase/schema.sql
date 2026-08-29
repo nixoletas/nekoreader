@@ -124,6 +124,32 @@ drop policy if exists "reading_positions: dono faz tudo" on public.reading_posit
 create policy "reading_positions: dono faz tudo" on public.reading_positions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- ---------- Funções ----------
+
+-- Quantas marcações cada livro tem, uma linha por livro.
+--
+-- Existe pra estante não precisar baixar `book_id` de TODA marcação da conta só
+-- pra somar — isso cresce sem teto, e o cartão do livro só quer um número.
+--
+-- `security invoker`: roda como quem chamou, então a RLS de `highlights` continua
+-- valendo. O `where` explícito é o que faz o índice ser usado.
+create or replace function public.contagem_marcacoes()
+returns table (book_id uuid, total bigint)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select h.book_id, count(*)::bigint as total
+  from public.highlights h
+  where h.user_id = auth.uid()
+  group by h.book_id;
+$$;
+
+grant execute on function public.contagem_marcacoes() to authenticated;
+
+create index if not exists highlights_user_idx on public.highlights (user_id, book_id);
+
 -- ---------- Storage ----------
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

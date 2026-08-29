@@ -240,6 +240,7 @@ export const es: Dicionario = {
 
   panel: {
     tabContents: "Índice",
+    tabSearch: "Buscar",
     tabNotes: "Notas {n}",
     tabPages: "Páginas {n}",
     tabChapters: "Capítulos {n}",
@@ -257,6 +258,31 @@ export const es: Dicionario = {
     none: "Este libro no trae índice — ni en los marcadores, ni en los títulos del texto.",
     failed: "No pude leer el índice de este libro.",
     noPage: "No pude averiguar en qué página empieza",
+  },
+
+  search: {
+    placeholder: "Buscar en el libro",
+    clear: "Limpiar",
+    hint: "Escribe una palabra o una frase para encontrarla en el libro.",
+    tooShort: "Escribe al menos dos letras.",
+    reading: "Abriendo el libro…",
+    scanning: "Leyendo el libro… {pct}%",
+    scanNote: "El libro entero se lee una vez, aquí en tu dispositivo. La próxima búsqueda es instantánea.",
+    count: { one: "{n} resultado", other: "{n} resultados" },
+    more: "Solo se listan los primeros {n}.",
+    none: "No se encontró nada para «{term}».",
+    noText: "No hay texto que buscar: este libro es un escaneo. Pasa el OCR en una página, en modo Texto, y podrás encontrarla.",
+    failed: "No pude buscar en este libro.",
+  },
+
+  errors: {
+    title: "Algo se rompió",
+    body: "Esta pantalla dio error. Volver a intentarlo suele bastar.",
+    retry: "Intentar de nuevo",
+    toShelf: "Volver a mis libros",
+    notFoundTitle: "Esta página no existe",
+    notFoundBody: "El enlace puede estar mal, o lo que apuntaba ya no está.",
+    home: "Ir al inicio",
   },
 
   highlight: {

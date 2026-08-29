@@ -240,6 +240,7 @@ export const de: Dicionario = {
 
   panel: {
     tabContents: "Inhalt",
+    tabSearch: "Suchen",
     tabNotes: "Notizen {n}",
     tabPages: "Seiten {n}",
     tabChapters: "Kapitel {n}",
@@ -257,6 +258,31 @@ export const de: Dicionario = {
     none: "Dieses Buch hat kein Inhaltsverzeichnis — weder in den Lesezeichen noch in den Überschriften.",
     failed: "Ich konnte das Inhaltsverzeichnis dieses Buchs nicht lesen.",
     noPage: "Konnte nicht herausfinden, auf welcher Seite das anfängt",
+  },
+
+  search: {
+    placeholder: "Im Buch suchen",
+    clear: "Löschen",
+    hint: "Tippe ein Wort oder einen Satz, um ihn im Buch zu finden.",
+    tooShort: "Tippe mindestens zwei Buchstaben.",
+    reading: "Buch wird geöffnet…",
+    scanning: "Buch wird gelesen… {pct} %",
+    scanNote: "Das ganze Buch wird einmal gelesen, hier auf deinem Gerät. Die nächste Suche geht sofort.",
+    count: { one: "{n} Treffer", other: "{n} Treffer" },
+    more: "Nur die ersten {n} stehen in der Liste.",
+    none: "Nichts gefunden für „{term}“.",
+    noText: "Hier gibt es keinen Text zum Suchen — dieses Buch ist ein Scan. Lass die Texterkennung im Textmodus über eine Seite laufen, dann ist sie auffindbar.",
+    failed: "Ich konnte in diesem Buch nicht suchen.",
+  },
+
+  errors: {
+    title: "Etwas ist kaputtgegangen",
+    body: "Auf diesem Bildschirm gab es einen Fehler. Ein neuer Versuch hilft meistens.",
+    retry: "Noch mal versuchen",
+    toShelf: "Zurück zu meinen Büchern",
+    notFoundTitle: "Diese Seite gibt es nicht",
+    notFoundBody: "Der Link kann falsch sein, oder das Ziel gibt es nicht mehr.",
+    home: "Zum Anfang",
   },
 
   highlight: {
