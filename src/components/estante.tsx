@@ -269,10 +269,7 @@ export default function Estante() {
         <div className="flex min-w-0 items-center gap-2.5">
           <Marca id="estante" tamanho={38} className="hidden sm:inline-flex" />
           <div className="min-w-0">
-            <h1 className="display text-2xl leading-none sm:text-3xl">
-              {d.brand.name}
-            </h1>
-            <p className="mt-1 flex items-center gap-2 truncate text-xs text-muted sm:text-sm">
+            <p className="mt-1 flex items-center gap-2 underline truncate text-xs text-muted sm:text-sm">
               {email}
               {deDados && (
                 <span className="shrink-0 rounded-full bg-muted/15 px-2 py-0.5 text-[10px] font-medium">
