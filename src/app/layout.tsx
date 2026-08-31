@@ -22,7 +22,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description: d.landing.metaDescription,
     manifest: "/manifest.webmanifest",
     icons: {
-      icon: [{ url: "/icons/192", sizes: "192x192", type: "image/png" }],
+      // O SVG é o que a aba do navegador usa quando sabe: fica nítido em
+      // qualquer densidade, e é o mesmo desenho do ícone instalado.
+      icon: [
+        { url: "/logo.svg", type: "image/svg+xml" },
+        { url: "/icons/192", sizes: "192x192", type: "image/png" },
+      ],
       apple: [{ url: "/icons/180", sizes: "180x180", type: "image/png" }],
     },
     applicationName: d.brand.name,

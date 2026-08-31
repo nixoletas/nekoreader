@@ -20,14 +20,20 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",
-    background_color: "#f4eee2",
-    theme_color: "#f4eee2",
+    // O mesmo papel do `--paper` claro e do fundo da marca: a tela de abertura
+    // do app instalado tem que ser a cor do app, não um creme parecido.
+    background_color: "#f0e7d5",
+    theme_color: "#f0e7d5",
     categories: ["books", "education", "productivity"],
     icons: [
+      // O SVG primeiro: quem souber ler escala sem borrar em qualquer densidade.
+      { src: "/logo.svg", sizes: "any", type: "image/svg+xml" },
       { src: "/icons/192", sizes: "192x192", type: "image/png" },
       { src: "/icons/512", sizes: "512x512", type: "image/png" },
+      // O maskable é o mesmo desenho com folga: o Android recorta num círculo, e
+      // sem folga as orelhas do gato ficam de fora.
       {
-        src: "/icons/512",
+        src: "/icons/512?mask=1",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

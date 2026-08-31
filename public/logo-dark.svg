@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Nekoreader"><rect width="128" height="128" rx="26" fill="#14110d"/><path d="M80 116 C102 122 118 116 114 99" fill="none" stroke="#e08a63" stroke-width="5.5" stroke-linecap="round"/>
+<path d="M40 48 C40 36 41 30 42.5 27 L46 5 L59 23 C62 22 66 22 69 23 L82 5 L85.5 27 C87 30 88 36 88 48 Z" fill="#e08a63"/>
+<path d="M45.7 22.5 L47.7 11.4 L54.3 20.4 Z" fill="#c8734f"/>
+<path d="M82.3 22.5 L80.3 11.4 L73.7 20.4 Z" fill="#c8734f"/>
+<clipPath id="nekoD"><path d="M28 46 H94 A10 10 0 0 1 104 56 V104 A10 10 0 0 1 94 114 H28 A4 4 0 0 1 24 110 V50 A4 4 0 0 1 28 46 Z"/></clipPath>
+<g clip-path="url(#nekoD)">
+<rect x="24" y="46" width="80" height="68" fill="#2b241c"/>
+<rect x="24" y="46" width="20" height="68" fill="#e08a63"/>
+<rect x="54" y="59" width="40" height="5" rx="2.5" fill="#4d4234"/>
+<rect x="54" y="71.5" width="40" height="5" rx="2.5" fill="#d8ab4e"/>
+<rect x="54" y="84" width="40" height="5" rx="2.5" fill="#4d4234"/>
+<rect x="54" y="96.5" width="24" height="5" rx="2.5" fill="#4d4234"/>
+</g></svg>

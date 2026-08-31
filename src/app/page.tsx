@@ -4,6 +4,7 @@ import { i18nAtual } from "@/lib/i18n/servidor";
 import SeletorIdioma from "@/components/seletor-idioma";
 import BotaoTema from "@/components/botao-tema";
 import { VitrineEstante, VitrineLeitor } from "@/components/prints-app";
+import Marca from "@/components/marca";
 
 // Lê cookie e cabeçalho pra escolher o idioma — nada aqui dá pra congelar em build.
 export const dynamic = "force-dynamic";
@@ -38,8 +39,11 @@ export default async function LandingPage() {
       {/* Fixo: a página ficou longa, e o botão de entrar é o motivo dela existir. */}
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-4 sm:px-8">
-          <span className="display text-xl tracking-tight sm:text-[1.4rem]">
-            {d.brand.name}
+          <span className="flex items-center gap-2">
+            <Marca id="topo" tamanho={30} />
+            <span className="display text-xl tracking-tight sm:text-[1.4rem]">
+              {d.brand.name}
+            </span>
           </span>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">

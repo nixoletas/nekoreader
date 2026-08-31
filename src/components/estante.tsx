@@ -21,6 +21,7 @@ import { idDoDispositivo } from "@/lib/dispositivo";
 import PreviaPagina from "@/components/previa-pagina";
 import type { PosicaoDispositivo } from "@/lib/types";
 import BookCard from "@/components/book-card";
+import Marca from "@/components/marca";
 import type { Book } from "@/lib/types";
 
 // Usa pdf.js (leitura de página/capa) só no navegador — nunca no servidor, senão
@@ -265,18 +266,21 @@ export default function Estante() {
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-6 sm:pt-8">
       {/* ---------- cabeçalho ---------- */}
       <header className="mb-6 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="display text-2xl leading-none sm:text-3xl">
-            {d.brand.name}
-          </h1>
-          <p className="mt-1 flex items-center gap-2 truncate text-xs text-muted sm:text-sm">
-            {email}
-            {deDados && (
-              <span className="shrink-0 rounded-full bg-muted/15 px-2 py-0.5 text-[10px] font-medium">
-                {d.common.offline}
-              </span>
-            )}
-          </p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Marca id="estante" tamanho={38} className="hidden sm:inline-flex" />
+          <div className="min-w-0">
+            <h1 className="display text-2xl leading-none sm:text-3xl">
+              {d.brand.name}
+            </h1>
+            <p className="mt-1 flex items-center gap-2 truncate text-xs text-muted sm:text-sm">
+              {email}
+              {deDados && (
+                <span className="shrink-0 rounded-full bg-muted/15 px-2 py-0.5 text-[10px] font-medium">
+                  {d.common.offline}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
         <SeletorIdioma compacto />

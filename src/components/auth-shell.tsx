@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { i18nAtual } from "@/lib/i18n/servidor";
 import SeletorIdioma from "@/components/seletor-idioma";
+import Marca from "@/components/marca";
 
 export default async function AuthShell({
   titulo,
@@ -38,7 +39,8 @@ export default async function AuthShell({
 
       <div className="sobe relative w-full max-w-md">
         <Link href="/" className="mb-7 block text-center">
-          <span className="display text-3xl tracking-tight">{d.brand.name}</span>
+          <Marca id="auth" tamanho={56} className="mb-1.5" />
+          <span className="display block text-3xl tracking-tight">{d.brand.name}</span>
           <span className="mt-1 block text-xs uppercase tracking-[0.25em] text-muted">
             {d.brand.kicker}
           </span>
