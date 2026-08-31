@@ -8,8 +8,20 @@ import { NextResponse, type NextRequest } from "next/server";
  * não um formulário de senha. `/new-password` fica **fora** desta lista de
  * propósito — quem chega lá vem do link do e-mail, e o `/auth/callback` já
  * trocou o código por uma sessão antes de mandar pra tela.
+ *
+ * `/privacy` precisa ser pública por dois motivos práticos: é preciso poder ler
+ * a política **antes** de criar a conta, e a tela de consentimento do Google
+ * exige um endereço que qualquer um abra. Mandá-la pro login seria mandar pro
+ * login exatamente quem ainda não tem conta.
  */
-const PUBLIC_PATHS = ["/login", "/forgot", "/auth", "/icons", "/manifest"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/forgot",
+  "/auth",
+  "/icons",
+  "/manifest",
+  "/privacy",
+];
 
 /** Onde a leitura de verdade começa, depois que a pessoa entra. */
 const DEPOIS_DE_ENTRAR = "/library";

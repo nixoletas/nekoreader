@@ -12,11 +12,16 @@
 </p>
 
 <p align="center">
-  <a href="https://nekoreader.com"><strong>nekoreader.com</strong></a> &nbsp;·&nbsp;
+  <a href="https://nekoreader.vercel.app"><strong>nekoreader.vercel.app</strong></a> &nbsp;·&nbsp;
   <a href="#funções">Funções</a> &nbsp;·&nbsp;
   <a href="#1-configurar-o-supabase">Instalar</a> &nbsp;·&nbsp;
   <a href="#estrutura">Estrutura</a> &nbsp;·&nbsp;
   <a href="#limites-conhecidos">Limites</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sponsors/nixoletas"><b>💛 Me ajude a comprar o domínio</b></a><br>
+  <sub>O app roda no plano gratuito e ainda mora em <code>nekoreader.vercel.app</code>.</sub>
 </p>
 
 <p align="center">
@@ -330,6 +335,8 @@ src/
     use-busca.ts               a aba de busca: varre uma vez, guarda, procura em memória
     exportar.ts                blocos → EPUB 3 (com page-list) e Markdown
     logo.ts                    o desenho da marca — fonte única do gato e do livro
+    legal.ts                   a política de privacidade nos seis idiomas
+    site.ts                    o endereço público (metadataBase, robots, sitemap)
     offline-db.ts              IndexedDB: livro baixado, retratos, fila de sincronização
     offline-sync.ts            executa ou enfileira; esvazia a fila quando volta a rede
     types.ts                   Book, Highlight, Bookmark, Rect, cores
@@ -338,6 +345,9 @@ src/
     layout.tsx                 resolve o idioma e monta o I18nProvider
     manifest.ts                manifest do PWA, no idioma do pedido
     icons/[size]/route.tsx     ícones 180/192/512 gerados (next/og) a partir de lib/logo.ts
+    opengraph-image.tsx        a imagem do link compartilhado, no idioma do pedido
+    robots.ts / sitemap.ts     só a landing e a privacidade são públicas
+    privacy/page.tsx           política de privacidade (texto em lib/legal.ts)
     error.tsx                  erro em qualquer tela, no idioma da pessoa
     global-error.tsx           o erro que derruba o próprio layout (último recurso)
     not-found.tsx              rota que não existe
@@ -373,6 +383,25 @@ supabase/schema.sql            tabelas, RLS, bucket, contagem de marcações
 - RLS em todas as tabelas: `auth.uid() = user_id`. Policies de Storage exigem
   que o arquivo esteja na pasta `<user_id>/`.
 - Só a chave `anon` vai pro navegador — nunca use a `service_role` no front.
+
+## Apoiar
+
+O Nekoreader roda inteiro em plano gratuito: Supabase (1 GB de arquivos, 5 GB/mês
+de saída) e Vercel. Ainda não tem domínio próprio — mora em
+`nekoreader.vercel.app`.
+
+O que o apoio compra, nesta ordem:
+
+1. **O domínio.** `nekoreader.com` custa uns US$ 12/ano. É também o que faz a
+   tela do Google dizer "Nekoreader" em vez do endereço do Supabase, na hora de
+   entrar com a conta Google.
+2. **Espaço.** 1 GB acaba rápido quando cada livro pesa dezenas de MB.
+
+- **GitHub Sponsors:** <https://github.com/sponsors/nixoletas>
+- **Ko-fi:** <https://ko-fi.com/nekoreader>
+
+Ajudar não dá vantagem nenhuma dentro do app — não há conta paga, não há função
+trancada. Continua sendo o mesmo leitor pra todo mundo.
 
 ## Limites conhecidos
 

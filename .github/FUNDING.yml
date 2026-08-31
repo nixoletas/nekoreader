@@ -1,0 +1,10 @@
+# Põe o botão "Sponsor" no topo do repositório.
+#
+# ATENÇÃO: os dois precisam existir antes de valerem alguma coisa —
+#   - GitHub Sponsors: github.com/sponsors/nixoletas (é preciso se cadastrar e
+#     ligar a conta de recebimento antes; até lá o botão leva a uma página vazia)
+#   - Ko-fi: troque `nekoreader` pelo seu usuário depois de criar a página
+#
+# Um handle que não existe dá 404 pra quem clicar, que é pior que não ter botão.
+github: [nixoletas]
+ko_fi: nekoreader

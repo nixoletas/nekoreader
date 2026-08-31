@@ -16,6 +16,7 @@ export const en = {
   },
 
   common: {
+  privacy: "Privacy",
     cancel: "Cancel",
     save: "Save",
     saving: "Saving…",
@@ -81,6 +82,8 @@ export const en = {
       subtitle: "Sign in to pick up where you left off.",
       footer: "Your books and your notes stay in your account, on any device.",
       tabSignIn: "Sign in",
+      google: "Continue with Google",
+      orEmail: "or with your email",
       tabSignUp: "Create account",
       email: "Email",
       emailPlaceholder: "you@example.com",
@@ -119,6 +122,7 @@ export const en = {
       notConfirmed: "Confirm your email before signing in.",
       weakPassword: "Password too short (6 minimum).",
       rateLimit: "Too many tries. Wait a bit.",
+      providerDisabled: "Signing in with Google isn't set up yet.",
       rateLimitMinutes: "Too many tries. Wait a few minutes.",
     },
   },
@@ -457,5 +461,7 @@ export const en = {
     ctaBody: "Create an account, drag a PDF in, and see what it looks like.",
     ctaButton: "Start reading",
     footerRights: "Built for people who write in their books.",
+    support: "Help me buy the domain",
+    supportWhy: "Nekoreader runs on a free plan and doesn't have its own domain yet. If it's useful to you, you can chip in.",
   },
 } as const;
