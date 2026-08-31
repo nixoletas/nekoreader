@@ -2,7 +2,7 @@
  * English — the reference dictionary.
  *
  * Every other language is typed against this one, so a key added here breaks
- * the build until all six are filled in. That is on purpose: a missing string
+ * the build until both are filled in. That is on purpose: a missing string
  * should be caught by `tsc`, not by someone reading a half-translated screen.
  *
  * Placeholders are `{name}` and get filled by `fmt()`. Anything that changes
@@ -81,49 +81,13 @@ export const en = {
       title: "Your books",
       subtitle: "Sign in to pick up where you left off.",
       footer: "Your books and your notes stay in your account, on any device.",
-      tabSignIn: "Sign in",
       google: "Continue with Google",
-      orEmail: "or with your email",
-      tabSignUp: "Create account",
-      email: "Email",
-      emailPlaceholder: "you@example.com",
-      password: "Password",
-      passwordNew: "6 characters or more",
-      passwordCurrent: "your password",
-      forgot: "Forgot password",
-      confirm: "Confirm password",
-      confirmPlaceholder: "type it again",
-      mismatch: "The passwords don't match.",
-      tooShort: "Your password needs 6 characters or more.",
-      created: "Account created. Confirm the email we sent, then sign in.",
-    },
-    forgot: {
-      title: "Forgot password",
-      subtitle: "We'll email you a link to set a new one.",
-      back: "← Back to sign in",
-      email: "Account email",
-      submit: "Send the link",
-      sending: "Sending…",
-      sent: "If there's an account for {email}, the link is on its way. Check your spam folder too.",
-      sentNote: "The link works for 1 hour and opens the new-password screen.",
-    },
-    newPassword: {
-      title: "New password",
-      subtitle: "Pick a password and confirm it so you don't mistype.",
-      password: "New password",
-      confirm: "Confirm new password",
-      submit: "Save new password",
-      ok: "Password changed. Opening your books…",
-      expired: "That link expired. Ask for another one under \"Forgot password\".",
+      /** Dito na tela, e não escondido: quem não tem conta Google não entra. */
+      onlyGoogle: "Google is the only way in — no password to create, and none to forget.",
     },
     errors: {
-      invalidCredentials: "Wrong email or password.",
-      alreadyRegistered: "That email already has an account.",
-      notConfirmed: "Confirm your email before signing in.",
-      weakPassword: "Password too short (6 minimum).",
       rateLimit: "Too many tries. Wait a bit.",
       providerDisabled: "Signing in with Google isn't set up yet.",
-      rateLimitMinutes: "Too many tries. Wait a few minutes.",
     },
   },
 
@@ -447,8 +411,8 @@ export const en = {
         body: "Turn a book into an EPUB or a text file, page numbers included, and keep reading it wherever you like.",
       },
       {
-        title: "Six languages",
-        body: "English, Portuguese, Spanish, French, German and Italian. The app follows your browser, and you can change it whenever you want.",
+        title: "English and Portuguese",
+        body: "The app follows your browser, and you can change it whenever you want.",
       },
     ],
     trustTitle: "Plainly said",
@@ -458,7 +422,7 @@ export const en = {
       "It runs in the browser. On your phone you can add it to the home screen and it behaves like any other app.",
     ],
     ctaTitle: "Bring a book",
-    ctaBody: "Create an account, drag a PDF in, and see what it looks like.",
+    ctaBody: "Sign in with Google, drag a PDF in, and see what it looks like.",
     ctaButton: "Start reading",
     footerRights: "Built for people who write in their books.",
     support: "Help me buy the domain",

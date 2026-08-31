@@ -6,22 +6,26 @@
 </p>
 
 <p align="center">
-  <strong>Leitor de PDF e EPUB no navegador.</strong><br>
-  A sua estante, o texto marcado em quatro cores e a página onde você parou —
-  no computador e no celular, na numeração que o livro imprime.
+  <b>English</b> &nbsp;·&nbsp; <a href="README.pt-BR.md">Português</a>
+</p>
+
+<p align="center">
+  <strong>A PDF and EPUB reader in the browser.</strong><br>
+  Your shelf, your text marked in four colours, and the page you stopped on —
+  on the computer and on the phone, in the numbering the book prints.
 </p>
 
 <p align="center">
   <a href="https://nekoreader.vercel.app"><strong>nekoreader.vercel.app</strong></a> &nbsp;·&nbsp;
-  <a href="#funções">Funções</a> &nbsp;·&nbsp;
-  <a href="#1-configurar-o-supabase">Instalar</a> &nbsp;·&nbsp;
-  <a href="#estrutura">Estrutura</a> &nbsp;·&nbsp;
-  <a href="#limites-conhecidos">Limites</a>
+  <a href="#features">Features</a> &nbsp;·&nbsp;
+  <a href="#1-set-up-supabase">Install</a> &nbsp;·&nbsp;
+  <a href="#layout">Layout</a> &nbsp;·&nbsp;
+  <a href="#known-limits">Limits</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/sponsors/nixoletas"><b>💛 Me ajude a comprar o domínio</b></a><br>
-  <sub>O app roda no plano gratuito e ainda mora em <code>nekoreader.vercel.app</code>.</sub>
+  <a href="https://github.com/sponsors/nixoletas"><b>💛 Help me buy the domain</b></a><br>
+  <sub>The app runs on free plans and still lives at <code>nekoreader.vercel.app</code>.</sub>
 </p>
 
 <p align="center">
@@ -29,27 +33,27 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-a33f27?style=flat-square&labelColor=211c16">
   <img alt="Tailwind v4" src="https://img.shields.io/badge/Tailwind-v4-a33f27?style=flat-square&labelColor=211c16">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Auth%20%2B%20Postgres-a33f27?style=flat-square&labelColor=211c16">
-  <img alt="PWA" src="https://img.shields.io/badge/PWA-lê%20offline-b78a34?style=flat-square&labelColor=211c16">
-  <img alt="6 idiomas" src="https://img.shields.io/badge/idiomas-6-b78a34?style=flat-square&labelColor=211c16">
+  <img alt="PWA" src="https://img.shields.io/badge/PWA-reads%20offline-b78a34?style=flat-square&labelColor=211c16">
+  <img alt="English and Portuguese" src="https://img.shields.io/badge/languages-en%20%C2%B7%20pt--BR-b78a34?style=flat-square&labelColor=211c16">
 </p>
 
 <br>
 
 <p align="center">
   <img src="public/print-web.png" width="880"
-       alt="O leitor aberto num computador, com um trecho marcado em amarelo e o painel de notas aberto ao lado">
+       alt="The reader open on a computer, with a passage highlighted in amber and the notes panel open beside it">
 </p>
 
 <p align="center">
   <img src="public/print-android.jpg" width="228"
-       alt="O mesmo livro aberto no celular, com a barra inferior de navegação">
+       alt="The same book open on a phone, with the bottom navigation bar">
   &nbsp;&nbsp;&nbsp;
   <img src="public/eg-android-1.jpg" width="228"
-       alt="A estante no celular, com as capas dos livros e o progresso de leitura">
+       alt="The shelf on a phone, with book covers and reading progress">
 </p>
 
 <p align="center">
-  <em>Instalável no celular: vai pra tela inicial e abre como app.</em>
+  <em>Installable on a phone: it goes to the home screen and opens like an app.</em>
 </p>
 
 <p align="center">
@@ -61,358 +65,398 @@
 
 ---
 
-## Funções
+## Features
 
 <p align="center">
   <img src="public/eg-web-1.png" width="880"
-       alt="A estante num computador: capas geradas da primeira página, barra de progresso e o cartão de continuar lendo">
+       alt="The shelf on a computer: covers generated from page one, progress bars and the continue-reading card">
 </p>
 
-| Função | Onde |
+| Feature | Where |
 |---|---|
-| Propaganda do app pra quem ainda não tem conta | `/` |
-| Criar conta (senha + confirmação) e entrar | `/login` |
-| Esqueci a senha → link por e-mail → nova senha | `/forgot` → `/new-password` |
-| Estante com upload de PDF/EPUB (arrastar ou tocar) | `/library` |
-| Com a estante cheia, o envio some num "+" no canto (modal) | `/library` |
-| Capa gerada da página 1 + barra de progresso | `/library` |
-| "Continuar lendo" com a página exata | `/library` |
-| Leitor com zoom, ← →, deslizar o dedo, ir pra página | `/book/[id]` |
-| Marcar texto em 4 cores; tocar na marcação pra apagar | `/book/[id]` |
-| Procurar uma palavra no livro inteiro, sem acento e sem caixa | painel |
-| Marcar página (★) e lista de páginas guardadas | painel |
-| Salva a última página lida sozinho (debounce 700ms) | automático |
-| Instalável no celular (PWA, standalone, ícone próprio) | manifest + SW |
-| Título e autor: editar à mão, ou descobrir pelo arquivo | estante e leitor |
-| Numeração do **livro** (ignora capa/rosto/sumário), inclusive romana | automático |
-| Conferir a folha original sem sair do texto remontado | leitor, modo Texto |
-| Exportar o livro em EPUB ou Markdown, com a página anotada | leitor |
-| OCR de página digitalizada, no próprio aparelho | leitor, modo Texto |
-| Equação destacada vira recorte da folha, em vez de texto embaralhado | modo Texto |
-| Interface em 6 idiomas, com seletor à mão | toda tela |
+| The pitch, for people without an account yet | `/` |
+| Sign in with Google — the only way in | `/login` |
+| Shelf with PDF/EPUB upload (drag or tap) | `/library` |
+| Once the shelf is full, upload folds into a "+" in the corner | `/library` |
+| Cover generated from page one + progress bar | `/library` |
+| "Continue reading" with the exact page | `/library` |
+| Reader with zoom, ← →, swipe, go to page | `/book/[id]` |
+| Highlight text in 4 colours; tap a highlight to delete it | `/book/[id]` |
+| Search the whole book, ignoring accents and case | panel |
+| Bookmark a page (★) and list the saved ones | panel |
+| Saves the last page read on its own (700ms debounce) | automatic |
+| Installable on a phone (PWA, standalone, its own icon) | manifest + SW |
+| Title and author: edit by hand, or work it out from the file | shelf and reader |
+| The **book's** numbering (skips cover, title page, contents), roman too | automatic |
+| Check the original page without leaving the rebuilt text | reader, Text mode |
+| Export the book as EPUB or Markdown, with the annotated page | reader |
+| OCR of a scanned page, on the device itself | reader, Text mode |
+| A display equation becomes a crop of the page, not scrambled text | Text mode |
+| Interface in English and Portuguese, with a switcher | every screen |
 
-### Idiomas
+### Languages
 
-Inglês (padrão e fallback), português do Brasil, espanhol, francês, alemão e
-italiano. O idioma sai, nesta ordem, do cookie `neko_lang` (a escolha da
-pessoa), do `Accept-Language` do navegador (o palpite) e do padrão.
+English (the default and the fallback) and Brazilian Portuguese. The language
+comes, in this order, from the `neko_lang` cookie (the person's choice), from
+the browser's `Accept-Language` (the guess), and from the default — anyone
+asking for another language lands on English.
 
-Quem resolve é o **servidor**, no `layout.tsx`, uma vez por pedido: é isso que
-faz o `<html lang>`, o `<title>`, o manifest do PWA e o texto da landing já
-nascerem certos, sem o lampejo de inglês que uma troca no cliente daria. O
-dicionário do idioma escolhido desce como prop pro `I18nProvider`, então o
-navegador baixa **um** idioma, não seis.
+The **server** decides, in `layout.tsx`, once per request: that is what makes
+`<html lang>`, the `<title>`, the PWA manifest and the landing copy come out
+right from the start, without the flash of English a client-side switch would
+give. The chosen dictionary comes down as a prop to `I18nProvider`, so the
+browser downloads **one** language, not both.
 
 ```
 src/lib/i18n/
-  config.ts              locales, cookie, detecção, idiomas do OCR
-  servidor.ts            localeAtual() / i18nAtual() — só no servidor
+  config.ts              locales, cookie, detection, OCR languages
+  servidor.ts            localeAtual() / i18nAtual() — server only
   cliente.tsx            I18nProvider, useT, useI18n, useTrocarIdioma
-  formato.ts             fmt("{n} de {total}") e plural() via Intl.PluralRules
+  formato.ts             fmt("{n} of {total}") and plural() via Intl.PluralRules
   dicionarios/
-    en.ts                a referência: as chaves saem daqui
-    tipo.ts              alarga os literais do en pra `string`
-    pt-BR.ts es.ts fr.ts de.ts it.ts
+    en.ts                the reference: the keys come from here
+    tipo.ts              widens en's literals back to `string`
+    pt-BR.ts
 ```
 
-O `en.ts` é a fonte da verdade do **formato**: `Dicionario` é o tipo dele com os
-literais alargados, então uma chave nova quebra o `tsc` nos outros cinco
-arquivos até ser preenchida. Tradução faltando é erro de compilação, não uma
-tela pela metade.
+`en.ts` is the source of truth for the **shape**: `Dicionario` is its type with
+the literals widened, so a new key breaks `tsc` in `pt-BR.ts` until it is filled
+in. A missing translation is a compile error, not a half-translated screen.
 
-Duas regras que valem a pena lembrar ao mexer:
+There were six languages up to now. Spanish, French, German and Italian were
+dropped because a translation with nobody to review it ages into being wrong —
+and a wrong sentence on screen is worse than an English one. The structure is
+unchanged: adding a language is creating the file and putting the code in
+`LOCALES`.
 
-- **Frase inteira no dicionário, nunca pedaço.** "na página" e "no capítulo" são
-  entradas separadas porque a preposição muda com o gênero em português e o caso
-  muda em alemão; montar `"n" + artigo + nome` só funciona numa língua.
-- **Contagem usa `{ one, other }`** e passa pelo `plural()`, que consulta o
-  `Intl.PluralRules` do idioma — o francês trata 0 como singular, o inglês não.
+Two rules worth remembering when touching this:
 
-O OCR acompanha: `IDIOMAS_OCR` mapeia cada idioma pro dicionário do tesseract
-(`por+eng`, `deu+eng`…), sempre com inglês junto, porque livro técnico em
-qualquer língua vem cheio de termo e nome próprio em inglês.
+- **Whole sentences in the dictionary, never fragments.** "on page" and "in
+  chapter" are separate entries because in Portuguese the preposition changes
+  with gender; assembling `"n" + article + noun` only works in one language.
+- **Counts use `{ one, other }`** and go through `plural()`, which asks the
+  language's `Intl.PluralRules` instead of comparing against 1 by hand.
 
-### Como o livro se chama
+OCR follows along: `IDIOMAS_OCR` maps each language to its tesseract data
+(`eng`, `por+eng`), always with English alongside, because a technical book in
+any language is full of English terms and proper nouns.
 
-No envio, o nome sai dos metadados do PDF e, quando eles não prestam, do texto
-da capa — onde o título é literalmente o que está escrito maior. O filtro de
-lixo é a parte que importa: `Title` costuma vir como "Microsoft Word -
-cap1_FINAL2.doc" ou "untitled", e aceitar isso dá um nome errado que ninguém
-desconfia que está errado. Sem nada aproveitável, fica o nome do arquivo.
+### What the book is called
 
-Depois disso é tudo na mão: o lápis no card da estante (ou o título na barra do
-leitor) abre título e autor pra editar, com um botão de **descobrir pelo
-arquivo** que relê metadados, capa e — se a capa for uma imagem — passa OCR
-nela. O que a pessoa escreve sempre ganha do que o app deduz.
+On upload, the name comes from the PDF's metadata and, when that is no good,
+from the text on the cover — where the title is literally whatever is written
+largest. The junk filter is the part that matters: `Title` usually arrives as
+"Microsoft Word - ch1_FINAL2.doc" or "untitled", and accepting that gives a
+wrong name nobody suspects is wrong. With nothing usable, the filename stays.
 
-### Numeração do livro
+After that it is all by hand: the pencil on the shelf card (or the title in the
+reader's bar) opens title and author for editing, with a **work it out from the
+file** button that re-reads metadata, the cover and — if the cover is an image —
+runs OCR on it. What a person writes always beats what the app guessed.
 
-Um PDF conta a partir da capa; o livro conta a partir do primeiro capítulo. A
-página 121 do arquivo costuma ser a 105 do livro — e é a do livro que aparece na
-citação, no índice e na conversa com outra pessoa.
+### The book's numbering
 
-O leitor descobre isso sozinho: usa `/PageLabels` quando o arquivo traz, e senão
-lê o número impresso no rodapé de uma amostra de páginas e tira a moda de
-"página do arquivo − número impresso". A abertura em romano (i, ii, … xvi) sai
-junto. Daí em diante toda a interface fala essa numeração — barra, marcações,
-sumário, grade de páginas, a pergunta de "continuar do outro aparelho" — e o
-campo "ir para a página" aceita tanto `87` quanto `xix`.
+A PDF counts from the cover; the book counts from the first chapter. Page 121 of
+the file is usually page 105 of the book — and it is the book's that shows up in
+a citation, in the index, and in a conversation with someone else.
 
-Marcações são salvas como retângulos em **fração da página (0..1)**, então
-continuam no lugar certo em qualquer zoom ou tamanho de tela. O véu é
-translúcido (`mix-blend-mode: multiply`, alfa ~0.28): o texto continua legível
-por baixo.
+The reader works it out on its own: it uses `/PageLabels` when the file carries
+them, and otherwise reads the number printed in the footer of a sample of pages
+and takes the mode of "file page − printed number". The roman opening (i, ii, …
+xvi) comes along. From then on the whole interface speaks that numbering — the
+bar, the highlights, the contents, the page grid, the "continue from the other
+device" question — and the "go to page" field accepts both `87` and `xix`.
 
-### Procurar no livro
+Highlights are stored as rectangles in **fractions of the page (0..1)**, so they
+stay in the right place at any zoom or screen size. The veil is translucent
+(`mix-blend-mode: multiply`, alpha ~0.28): the text stays readable underneath.
 
-A quarta aba do painel. Digite uma palavra e ela aparece com o pedaço de frase
-em volta, na numeração do livro; tocar leva pra página.
+### Searching the book
 
-Duas decisões explicam o resto:
+The fourth tab of the panel. Type a word and it appears with the piece of
+sentence around it, in the book's numbering; tapping takes you to the page.
 
-- **Procurar é mais tolerante que ler.** Quem digita não repete o livro
-  caractere por caractere: escreve sem acento, em minúscula, e a palavra que
-  procura pode estar partida entre duas linhas por um hífen. O casamento
-  acontece numa forma achatada do texto — sem acento, sem caixa, com aspa curva
-  e travessão virando o que dá pra digitar —, mas o trecho mostrado volta **como
-  o livro escreveu**. É o que faz "cao" achar "coração" e ainda assim exibir
-  "coração".
-- **Ler o livro uma vez, procurar muitas.** A primeira busca varre o arquivo
-  inteiro (com barra de progresso) e guarda o texto no aparelho; da segunda em
-  diante nem o PDF é aberto, e a busca responde a cada tecla. Varredura
-  cancelada no meio não é guardada — meio livro guardado faria a busca mentir
-  calada.
+Two decisions explain the rest:
 
-O texto de cada página sai da mesma remontagem do modo texto, e não do texto
-cru: é ela que junta linha em parágrafo e desfaz a hifenização. Página que já
-passou por OCR entra de graça, porque o resultado do OCR já estava guardado.
+- **Searching has to be more forgiving than reading.** Someone typing does not
+  reproduce the book character by character: they write without accents, in
+  lowercase, and the word they want may be split across two lines by a hyphen.
+  Matching happens on a flattened form of the text — no accents, no case, curly
+  quotes and dashes folded into what a keyboard has — but the snippet comes back
+  **as the book wrote it**. That is what makes "cao" find "coração" and still
+  show "coração".
+- **Read the book once, search it many times.** The first search sweeps the whole
+  file (with a progress bar) and keeps the text on the device; from the second on
+  the PDF is not even opened, and the search answers on every keystroke. A sweep
+  cancelled halfway is not kept — half a book kept would make the search lie
+  quietly.
+
+Each page's text comes from the same rebuild the Text mode uses, not from the raw
+text: that is what joins lines into paragraphs and undoes hyphenation. A page
+that already went through OCR joins for free, because the OCR result was already
+stored.
 
 ### Mobile
 
-- Barra inferior fixa com alvos de 48px: ‹ · ★ · página · marcações · ›
-- Deslizar o dedo na página vira a página (ignorado quando há texto selecionado)
-- Painel de marcações vira folha deslizante (bottom sheet)
-- `viewport-fit=cover` + `env(safe-area-inset-bottom)` pro notch/gesture bar
+- Fixed bottom bar with 48px targets: ‹ · ★ · page · notes · ›
+- Swiping the page turns it (ignored while text is selected)
+- The notes panel becomes a bottom sheet
+- `viewport-fit=cover` + `env(safe-area-inset-bottom)` for the notch and gesture bar
 
 ### Design
 
-Paleta de papel e tinta (`--paper`, `--ink`, `--accent` vermelho de lombada,
-`--gold`), grão sutil no fundo, títulos em **Fraunces** (serifada), claro e
-escuro automáticos. Tokens ficam todos no topo de `src/app/globals.css`.
+A paper-and-ink palette (`--paper`, `--ink`, `--accent` a spine red, `--gold`),
+a subtle grain in the background, headings in **Fraunces** (a serif), light and
+dark automatic. The tokens all live at the top of `src/app/globals.css`.
 
-### A marca
+### The mark
 
-Um gato atrás de um livro — o livro que o ícone já era, mais o "neko" que
-faltava. A cabeça aparece só uns oito pixels acima da capa, mas é a curva entre
-as duas orelhas que faz o olho ler "gato atrás do livro" em vez de "dois
-triângulos".
+A cat behind a book — the book the icon already was, plus the "neko" that was
+missing. Only about eight pixels of the head show above the cover, but it is the
+curve between the two ears that makes the eye read "cat behind a book" instead
+of "two triangles".
 
-O desenho mora em `src/lib/logo.ts` e é usado em três lugares por caminhos
-diferentes, sem existir duas vezes:
+The drawing lives in `src/lib/logo.ts` and is used in three places by three
+different routes, without existing twice:
 
-| Onde | Como |
+| Where | How |
 |---|---|
-| Ícone do PWA e do iOS | `app/icons/[size]` rasteriza com `next/og` |
-| Dentro das telas | `components/marca.tsx`, inline no DOM |
-| README e `<link rel=icon>` | `public/logo*.svg`, arquivos gerados |
+| PWA and iOS icon | `app/icons/[size]` rasterises it with `next/og` |
+| Inside the screens | `components/marca.tsx`, inline in the DOM |
+| README and `<link rel=icon>` | `public/logo*.svg`, generated files |
 
-Inline no DOM o SVG usa as variáveis do tema (`--accent`, `--surface`), então a
-marca acompanha claro e escuro sozinha, sem duas cópias. Já o ícone e os
-arquivos de `public/` são desenhados fora de qualquer página — ali não há CSS
-pra resolver variável, e as cores vão por extenso.
+Inline in the DOM the SVG uses the theme's variables (`--accent`, `--surface`),
+so the mark follows light and dark on its own, without a second copy. The icon
+and the files in `public/`, on the other hand, are drawn outside any page —
+there is no CSS there to resolve a variable, so the colours are spelled out.
 
-O wordmark é contorno, não `<text>`: um SVG com `<text>` usa a fonte da máquina
-de quem olha, e o logo mudaria de forma de computador pra computador. As curvas
-saem da própria Fraunces que o app carrega.
+The wordmark is outlines, not `<text>`: an SVG with `<text>` uses whatever font
+the viewer's machine has, and the logo would change shape from computer to
+computer. The curves come from the same Fraunces the app loads.
 
 ```bash
-node scripts/gerar-logo.mjs    # reescreve public/logo*.svg
-python scripts/gerar-logo.py   # só se o wordmark mudar (precisa de fonttools)
+node scripts/gerar-logo.mjs    # rewrites public/logo*.svg
+python scripts/gerar-logo.py   # only if the wordmark changes (needs fonttools)
 ```
 
-Nenhum dos dois roda no build. `test/logo.test.mjs` é que garante que os
-arquivos commitados continuam batendo com o desenho — arquivo gerado e
-versionado envelhece calado.
+Neither runs in the build. `test/logo.test.mjs` is what guarantees the committed
+files still match the drawing — a generated file that is also committed ages
+quietly.
 
 ---
 
-## 1. Configurar o Supabase
+## 1. Set up Supabase
 
-1. Crie um projeto em <https://supabase.com> (plano free serve).
-2. **SQL Editor → New query** → cole o conteúdo de
+1. Create a project at <https://supabase.com> (the free plan is enough).
+2. **SQL Editor → New query** → paste the contents of
    [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
-   Isso cria as tabelas `books`, `highlights`, `bookmarks` e
-   `reading_positions`, liga RLS (cada usuário só enxerga o que é dele), cria a
-   função `contagem_marcacoes()` que a estante usa pra contar as marcações de
-   cada livro, e cria o bucket privado `books`.
+   That creates the `books`, `highlights`, `bookmarks` and `reading_positions`
+   tables, turns on RLS (each user only sees their own), creates the
+   `contagem_marcacoes()` function the shelf uses to count highlights per book,
+   and creates the private `books` bucket.
 
-   O arquivo é idempotente: rodar de novo num banco que já existe só acrescenta
-   o que faltava.
-3. **Authentication → Providers → Email**: deixe ligado.
-   - Pra testar rápido, desligue *Confirm email*.
-   - Se deixar ligado, o usuário recebe e-mail e volta por `/auth/callback`.
-4. **Authentication → URL Configuration** (obrigatório pro "esqueci a senha"
-   funcionar):
-   - *Site URL*: `http://localhost:3000` (e depois a URL da Vercel)
-   - *Redirect URLs*: adicione `http://localhost:3000/**` e
-     `https://SEU-APP.vercel.app/**`
-5. **Project Settings → API**: copie `Project URL` e a chave `anon public`.
+   The file is idempotent: running it again on an existing database only adds
+   what was missing.
+3. **Authentication → Providers → Email**: turn it **off**. The app no longer
+   offers it, but while the provider is on, the API still accepts sign-ups
+   through it.
+4. **Authentication → URL Configuration** (required for the Google redirect to
+   come back):
+   - *Site URL*: `http://localhost:3000` (and later your deployed URL)
+   - *Redirect URLs*: add `http://localhost:3000/**` and
+     `https://YOUR-APP.vercel.app/**`
+5. **Project Settings → API**: copy the `Project URL` and the `anon public` key.
 
-## 2. Rodar local
+### Signing in with Google (required)
+
+Google is the only way in — there is no email-and-password form. That is a
+deliberate trade: what weighed was not the form but its tail (confirm the email,
+resend the confirmation, forgot the password, receive the link, expired link),
+half a dozen screens and a real email service to keep alive before anyone reads
+a page. The cost is stated plainly on the sign-in screen: no Google account, no
+way in.
+
+Set it up in this order, because the consent screen asks for the privacy policy
+URL:
+
+1. **Google Cloud Console → OAuth consent screen**: app name, support email, and
+   the privacy policy address (`https://your-app.vercel.app/privacy`).
+2. **Credentials → OAuth Client ID (Web)**: authorised redirect URI
+   `https://<your-project>.supabase.co/auth/v1/callback`.
+3. **Supabase → Auth → Providers → Google**: paste the Client ID and Secret.
+
+Two things worth knowing before you start. The Google screen will say "continue
+to `<your-project>.supabase.co`", not your app's name — the OAuth redirect
+belongs to Supabase, and only a custom domain there (a paid add-on) changes it.
+And the basic scopes (email and profile) need no verification from Google and
+have no 100-user cap; that only applies to sensitive scopes.
+
+Until the provider is switched on, the button answers with a plain message
+instead of Supabase's raw "Unsupported provider".
+
+Anyone who already had an account with the same, confirmed email keeps it:
+Supabase attaches the Google identity to the existing user instead of creating a
+second one.
+
+## 2. Run it locally
 
 ```bash
-cp .env.example .env.local   # e preencha as duas variáveis
+cp .env.example .env.local   # and fill in the two variables
 npm install
 npm run dev
 ```
 
-Abra <http://localhost:3000>, crie a conta, suba um PDF.
+Open <http://localhost:3000>, create an account, upload a PDF.
 
-> `predev`/`prebuild` copiam o worker e os cMaps do pdf.js pra `public/`.
-> Esses arquivos são gerados — não precisam ir pro git.
+> `predev`/`prebuild` copy the pdf.js worker and cMaps into `public/`.
+> Those files are generated — they do not need to be in git.
 
-Pra testar o PWA (instalar no celular, service worker) precisa de build de
-produção — o SW só registra em produção:
+To test the PWA (installing on a phone, the service worker) you need a
+production build — the SW only registers in production:
 
 ```bash
 npm run build && npm start
 ```
 
-### Testes
+### Tests
 
 ```bash
 npm test
 ```
 
-`pretest` compila os módulos puros de `src/lib` pro node (em
-`node_modules/.cache/teste`) e `node --test` roda `test/`. São testes da parte
-que erra caro e não dá pra conferir de olho: a numeração impressa, a detecção de
-fórmula (principalmente o que **não** é fórmula), a conversão pra EPUB/Markdown,
-o casamento da busca (achar "ção" digitando "cao", e **não** achar o que não
-está lá) e se os SVG de `public/` ainda batem com o desenho de `lib/logo.ts`.
+`pretest` compiles the pure modules of `src/lib` for node (into
+`node_modules/.cache/teste`) and `node --test` runs `test/`. These cover the
+parts that are expensive to get wrong and impossible to eyeball: the printed
+numbering, formula detection (above all what is **not** a formula), the
+EPUB/Markdown conversion, the search matcher (finding "ção" by typing "cao", and
+**not** finding what is not there), and whether the SVGs in `public/` still match
+the drawing in `lib/logo.ts`.
 
-O `tsc` também é teste aqui: `npm run typecheck` é o que cobra as seis traduções
-de toda chave nova.
+`tsc` is a test here too: `npm run typecheck` is what demands the Portuguese
+translation of every new key.
 
-## 3. Deploy na Vercel
+## 3. Deploy to Vercel
 
 ```bash
-npm i -g vercel     # se ainda não tiver
-git init && git add -A && git commit -m "leitor de pdf"
-vercel              # segue o wizard
+npm i -g vercel     # if you don't have it yet
+git init && git add -A && git commit -m "pdf reader"
+vercel              # follow the wizard
 ```
 
-Ou: suba pro GitHub e importe o repo em <https://vercel.com/new>.
+Or: push to GitHub and import the repo at <https://vercel.com/new>.
 
-Em **Project → Settings → Environment Variables** cadastre (Production +
-Preview):
+In **Project → Settings → Environment Variables** add (Production + Preview):
 
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
-Depois do primeiro deploy, volte no Supabase e adicione a URL da Vercel em
-*Site URL* e *Redirect URLs* (passo 1.4).
+`NEXT_PUBLIC_SITE_URL` is optional: without it the app falls back to Vercel's
+production domain, which is right for shared links and the sitemap. Set it when
+a domain of its own arrives — that is the only change a new domain needs.
+
+After the first deploy, go back to Supabase and add the Vercel URL to *Site URL*
+and *Redirect URLs* (step 1.4).
 
 ---
 
-## Estrutura
+## Layout
 
 ```
 src/
-  proxy.ts                     guarda de rota + refresh de sessão (Next 16)
+  proxy.ts                     route guard + session refresh (Next 16)
   lib/
-    i18n/                      idiomas (ver "Idiomas" acima)
+    i18n/                      languages (see "Languages" above)
     supabase/{client,server,session}.ts
-    pdf.ts                     worker do pdf.js, nº de páginas e capa
-    pdf-blocos.ts              remontagem: linha → parágrafo, título, tabela, fórmula
-    pdf-rotulos.ts             numeração impressa do livro (folio, romano, deslocamento)
-    pdf-titulo.ts              título e autor: metadados peneirados, capa, OCR
-    pdf-ocr.ts                 página digitalizada → os mesmos Item do pdf.js
-    busca.ts                   casamento sem acento e sem caixa, e o trecho em volta
-    pdf-busca.ts               lê o livro inteiro uma vez, pra a busca ter onde procurar
-    use-busca.ts               a aba de busca: varre uma vez, guarda, procura em memória
-    exportar.ts                blocos → EPUB 3 (com page-list) e Markdown
-    logo.ts                    o desenho da marca — fonte única do gato e do livro
-    legal.ts                   a política de privacidade nos seis idiomas
-    site.ts                    o endereço público (metadataBase, robots, sitemap)
-    offline-db.ts              IndexedDB: livro baixado, retratos, fila de sincronização
-    offline-sync.ts            executa ou enfileira; esvazia a fila quando volta a rede
-    types.ts                   Book, Highlight, Bookmark, Rect, cores
+    pdf.ts                     the pdf.js worker, page count and cover
+    pdf-blocos.ts              rebuild: line → paragraph, heading, table, formula
+    pdf-rotulos.ts             the book's printed numbering (folio, roman, offset)
+    pdf-titulo.ts              title and author: sifted metadata, cover, OCR
+    pdf-ocr.ts                 scanned page → the same pdf.js Items
+    busca.ts                   accent- and case-blind matching, and the snippet
+    pdf-busca.ts               reads the whole book once, so search has somewhere to look
+    use-busca.ts               the search tab: sweep once, keep it, match in memory
+    exportar.ts                blocks → EPUB 3 (with page-list) and Markdown
+    logo.ts                    the mark — the single source of the cat and the book
+    legal.ts                   the privacy policy in both languages
+    site.ts                    the public address (metadataBase, robots, sitemap)
+    offline-db.ts              IndexedDB: downloaded book, snapshots, sync queue
+    offline-sync.ts            run or enqueue; drain the queue when the network returns
+    types.ts                   Book, Highlight, Bookmark, Rect, colours
   app/
-    globals.css                paleta, grão, estilo das marcações
-    layout.tsx                 resolve o idioma e monta o I18nProvider
-    manifest.ts                manifest do PWA, no idioma do pedido
-    icons/[size]/route.tsx     ícones 180/192/512 gerados (next/og) a partir de lib/logo.ts
-    opengraph-image.tsx        a imagem do link compartilhado, no idioma do pedido
-    robots.ts / sitemap.ts     só a landing e a privacidade são públicas
-    privacy/page.tsx           política de privacidade (texto em lib/legal.ts)
-    error.tsx                  erro em qualquer tela, no idioma da pessoa
-    global-error.tsx           o erro que derruba o próprio layout (último recurso)
-    not-found.tsx              rota que não existe
-    page.tsx                   landing (pública; logado é mandado pra /library)
-    login/                     entrar / criar conta (senha + confirmação)
-    forgot/                    pedir link de recuperação
-    new-password/              trocar a senha depois do link
-    auth/callback              confirma e-mail e troca `code` por sessão
-    auth/signout               sair
-    library/page.tsx           estante
-    book/[id]/page.tsx         livro + URL assinada + marcações
-    book/[id]/notes/page.tsx   marcações em página inteira
+    globals.css                palette, grain, highlight styling
+    layout.tsx                 resolves the language and mounts the I18nProvider
+    manifest.ts                the PWA manifest, in the request's language
+    icons/[size]/route.tsx     180/192/512 icons generated (next/og) from lib/logo.ts
+    opengraph-image.tsx        the shared-link image, in the request's language
+    robots.ts / sitemap.ts     only the landing and the privacy page are public
+    privacy/page.tsx           privacy policy (text in lib/legal.ts)
+    error.tsx                  an error on any screen, in the person's language
+    global-error.tsx           the error that takes down the layout itself (last resort)
+    not-found.tsx              a route that does not exist
+    page.tsx                   landing (public; signed-in visitors go to /library)
+    login/                     sign in with Google (the only provider)
+    auth/callback              trades the `code` Google returns for a session
+    auth/signout               sign out
+    library/page.tsx           the shelf
+    book/[id]/page.tsx         the book + signed URL + highlights
+    book/[id]/notes/page.tsx   highlights on a full page
   components/
-    ui.tsx                     Campo, Botao, Aviso (alvos de 48px)
-    marca.tsx                  a marca inline, que acompanha o tema pelas variáveis
-    auth-shell.tsx             moldura das telas de conta
-    seletor-idioma.tsx         troca de idioma (<select> nativo)
-    prints-app.tsx             as duas telas do app (computador + celular), na landing
-    uploader.tsx               upload com capa gerada no cliente
-    book-card.tsx              capa com lombada + progresso
-    reader.tsx                 barras, painel, folhas, persistência
-    pdf-canvas.tsx             render, seleção → marcação, swipe
-    sw-register.tsx            registra o service worker (só em produção)
-public/sw.js                   cache de asset estático (nunca HTML/sessão)
-public/logo*.svg               marca e banner — gerados por scripts/gerar-logo.mjs
-supabase/schema.sql            tabelas, RLS, bucket, contagem de marcações
+    ui.tsx                     Campo, Botao, Aviso (48px targets)
+    marca.tsx                  the inline mark, following the theme through variables
+    auth-shell.tsx             the frame for the account screens
+    seletor-idioma.tsx         language switcher
+    prints-app.tsx             the app's two screens (desktop + phone), on the landing
+    uploader.tsx               upload with the cover generated on the client
+    book-card.tsx              cover with a spine + progress
+    reader.tsx                 bars, panel, sheets, persistence
+    pdf-canvas.tsx             render, selection → highlight, swipe
+    sw-register.tsx            registers the service worker (production only)
+public/sw.js                   static asset cache (never HTML or session)
+public/logo*.svg               mark and banner — generated by scripts/gerar-logo.mjs
+supabase/schema.sql            tables, RLS, bucket, highlight counts
 ```
 
-## Segurança
+## Security
 
-- Bucket `books` é **privado**; o app usa URLs assinadas (6h pro PDF, 1h pras
-  capas).
-- RLS em todas as tabelas: `auth.uid() = user_id`. Policies de Storage exigem
-  que o arquivo esteja na pasta `<user_id>/`.
-- Só a chave `anon` vai pro navegador — nunca use a `service_role` no front.
+- The `books` bucket is **private**; the app uses signed URLs (6h for the PDF,
+  1h for covers).
+- RLS on every table: `auth.uid() = user_id`. Storage policies require the file
+  to live in the `<user_id>/` folder.
+- Only the `anon` key reaches the browser — never use `service_role` on the
+  front end.
 
-## Apoiar
+## Support
 
-O Nekoreader roda inteiro em plano gratuito: Supabase (1 GB de arquivos, 5 GB/mês
-de saída) e Vercel. Ainda não tem domínio próprio — mora em
+Nekoreader runs entirely on free plans: Supabase (1 GB of files, 5 GB/month of
+egress) and Vercel. It does not have a domain of its own yet — it lives at
 `nekoreader.vercel.app`.
 
-O que o apoio compra, nesta ordem:
+What support buys, in this order:
 
-1. **O domínio.** `nekoreader.com` custa uns US$ 12/ano. É também o que faz a
-   tela do Google dizer "Nekoreader" em vez do endereço do Supabase, na hora de
-   entrar com a conta Google.
-2. **Espaço.** 1 GB acaba rápido quando cada livro pesa dezenas de MB.
+1. **The domain.** `nekoreader.com` costs about US$12/year. It is also what makes
+   the Google screen say "Nekoreader" instead of the Supabase address when
+   signing in with a Google account.
+2. **Room.** 1 GB runs out fast when a single book weighs tens of MB.
 
 - **GitHub Sponsors:** <https://github.com/sponsors/nixoletas>
-- **Ko-fi:** <https://ko-fi.com/nekoreader>
+- **Ko-fi:** <https://ko-fi.com/nicholasmiyasato>
 
-Ajudar não dá vantagem nenhuma dentro do app — não há conta paga, não há função
-trancada. Continua sendo o mesmo leitor pra todo mundo.
+Supporting gets you nothing extra inside the app — there is no paid tier and no
+locked feature. It stays the same reader for everyone.
 
-## Limites conhecidos
+## Known limits
 
-- Leitura é **uma página por vez** (não é scroll contínuo).
-- No modo Página, marcar depende da camada de texto do PDF. Página digitalizada
-  precisa do OCR (modo Texto), que é sob demanda, uma página por vez.
-- O OCR baixa o dicionário do idioma de um CDN na primeira vez (fica no
-  IndexedDB depois). O worker e o núcleo WASM são servidos pelo próprio app.
-- A numeração do livro sai da camada de texto: livro digitalizado só ganha ela
-  depois do OCR, página a página. A busca segue a mesma regra — acha o que tem
-  camada de texto, e a página digitalizada só entra depois de passar o OCR.
-- A busca leva a pessoa até a página; ela não pinta a ocorrência em cima da
-  folha desenhada.
-- Limite de 100 MB por arquivo (ajustável em `supabase/schema.sql`).
+- Reading is **one page at a time** (not continuous scroll).
+- In Page mode, highlighting depends on the PDF's text layer. A scanned page
+  needs OCR (Text mode), which is on demand, one page at a time.
+- OCR downloads the language data from a CDN the first time (it stays in
+  IndexedDB afterwards). The worker and the WASM core are served by the app
+  itself.
+- The book's numbering comes from the text layer: a scanned book only gets it
+  after OCR, page by page. Search follows the same rule — it finds what has a
+  text layer, and a scanned page only joins once OCR has run on it.
+- Search takes you to the page; it does not paint the match onto the rendered
+  page.
+- A 100 MB limit per file (adjustable in `supabase/schema.sql`).

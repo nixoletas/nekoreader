@@ -14,7 +14,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: ["/", "/privacy"],
-      disallow: ["/library", "/book/", "/auth/", "/login", "/forgot", "/new-password"],
+      disallow: ["/library", "/book/", "/auth/", "/login"],
     },
     sitemap: urlDoSite("/sitemap.xml"),
   };

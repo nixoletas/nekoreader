@@ -6,7 +6,7 @@ import { LOCALES, NOME_DO_IDIOMA, type Locale } from "@/lib/i18n/config";
 import { useI18n, useTrocarIdioma } from "@/lib/i18n/cliente";
 
 /** Altura que a lista pede pra caber sem virar rolagem, em px. */
-const ALTURA_LISTA = 6 * 40 + 16;
+const ALTURA_LISTA = LOCALES.length * 40 + 16;
 
 /**
  * Troca de idioma.
@@ -22,8 +22,8 @@ const ALTURA_LISTA = 6 * 40 + 16;
  * `aria-activedescendant`, setas pra andar, Enter pra escolher, Esc pra fechar,
  * toque fora pra desistir.
  *
- * Cada idioma aparece escrito nele mesmo ("Deutsch", e não "Alemão"): quem caiu
- * numa tela em idioma que não entende procura a palavra que reconhece.
+ * Cada idioma aparece escrito nele mesmo ("Português", e não "Portuguese"): quem
+ * caiu numa tela em idioma que não entende procura a palavra que reconhece.
  */
 export default function SeletorIdioma({
   className = "",

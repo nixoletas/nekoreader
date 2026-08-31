@@ -6,7 +6,7 @@
  * mão), e uma dependência de qualquer um dos dois lados quebraria o outro.
  */
 
-export const LOCALES = ["en", "pt-BR", "es", "fr", "de", "it"] as const;
+export const LOCALES = ["en", "pt-BR"] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
@@ -28,10 +28,6 @@ export const COOKIE_IDIOMA_MAX_AGE = 60 * 60 * 24 * 365;
 export const NOME_DO_IDIOMA: Record<Locale, string> = {
   en: "English",
   "pt-BR": "Português",
-  es: "Español",
-  fr: "Français",
-  de: "Deutsch",
-  it: "Italiano",
 };
 
 /**
@@ -44,19 +40,11 @@ export const NOME_DO_IDIOMA: Record<Locale, string> = {
 export const IDIOMAS_OCR: Record<Locale, string> = {
   en: "eng",
   "pt-BR": "por+eng",
-  es: "spa+eng",
-  fr: "fra+eng",
-  de: "deu+eng",
-  it: "ita+eng",
 };
 
 const POR_PREFIXO: Record<string, Locale> = {
   en: "en",
   pt: "pt-BR",
-  es: "es",
-  fr: "fr",
-  de: "de",
-  it: "it",
 };
 
 /**
@@ -65,6 +53,9 @@ const POR_PREFIXO: Record<string, Locale> = {
  * O prefixo basta porque só temos uma variante de cada idioma: quem pede
  * `pt-PT` prefere português brasileiro a inglês, e quem pede `en-GB` prefere
  * inglês americano a nada.
+ *
+ * Quem pede espanhol, francês ou qualquer outro cai no `null` e daí no padrão,
+ * que é o inglês — o mesmo caminho de sempre, só que agora acontece mais.
  */
 export function normalizarLocale(bruto: string | undefined | null): Locale | null {
   if (!bruto) return null;

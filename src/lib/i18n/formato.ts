@@ -19,10 +19,11 @@ export function fmt(modelo: string, valores: Valores = {}): string {
 /**
  * A forma certa da frase pra uma contagem, no idioma certo.
  *
- * `Intl.PluralRules` é quem sabe que o francês trata 0 como singular e que o
- * inglês não; escrever isso na mão daria errado em pelo menos um dos seis.
- * Só guardamos `one` e `other` porque nenhum dos seis idiomas precisa de mais —
- * um idioma com `few`/`many` (russo, polonês) exigiria ampliar o tipo `Plural`.
+ * `Intl.PluralRules` é quem sabe que o português trata 0 como singular e que o
+ * inglês não; escrever isso na mão daria errado num dos dois.
+ * Só guardamos `one` e `other` porque nem o inglês nem o português precisam de
+ * mais — um idioma com `few`/`many` (russo, polonês) exigiria ampliar o tipo
+ * `Plural`.
  */
 export function plural(
   locale: Locale,
