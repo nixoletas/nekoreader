@@ -8,6 +8,7 @@ export const de: Dicionario = {
   },
 
   common: {
+  privacy: "Datenschutz",
     cancel: "Abbrechen",
     save: "Speichern",
     saving: "Wird gespeichert…",
@@ -71,6 +72,8 @@ export const de: Dicionario = {
       subtitle: "Melde dich an und lies dort weiter, wo du aufgehört hast.",
       footer: "Deine Bücher und Notizen bleiben in deinem Konto — auf jedem Gerät.",
       tabSignIn: "Anmelden",
+      google: "Mit Google fortfahren",
+      orEmail: "oder mit deiner E-Mail",
       tabSignUp: "Konto erstellen",
       email: "E-Mail",
       emailPlaceholder: "du@beispiel.de",
@@ -109,6 +112,7 @@ export const de: Dicionario = {
       notConfirmed: "Bestätige deine E-Mail, bevor du dich anmeldest.",
       weakPassword: "Passwort zu kurz (mindestens 6).",
       rateLimit: "Zu viele Versuche. Warte einen Moment.",
+      providerDisabled: "Die Anmeldung mit Google ist noch nicht eingerichtet.",
       rateLimitMinutes: "Zu viele Versuche. Warte ein paar Minuten.",
     },
   },
@@ -444,5 +448,7 @@ export const de: Dicionario = {
     ctaBody: "Erstelle ein Konto, zieh ein PDF hinein und sieh dir an, wie es aussieht.",
     ctaButton: "Loslesen",
     footerRights: "Gemacht für Leute, die in ihre Bücher schreiben.",
+    support: "Hilf mir, die Domain zu kaufen",
+    supportWhy: "Nekoreader läuft auf einem kostenlosen Plan und hat noch keine eigene Domain. Wenn es dir nützt, kannst du etwas beisteuern.",
   },
 };

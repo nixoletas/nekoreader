@@ -216,6 +216,20 @@ export default async function LandingPage() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-8 text-sm text-muted sm:px-8">
           <span className="display text-foreground">{d.brand.name}</span>
           <span>{d.landing.footerRights}</span>
+          <Link href="/privacy" className="hover:text-foreground">
+            {d.common.privacy}
+          </Link>
+          {/* Um pedido, não um apelo: uma linha no rodapé, do tamanho dos outros
+              links. Quem veio ler um PDF não precisa tropeçar nele. */}
+          <a
+            href="https://github.com/sponsors/nixoletas"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={d.landing.supportWhy}
+            className="text-accent hover:underline"
+          >
+            {d.landing.support}
+          </a>
           <div className="ml-auto">
             <SeletorIdioma />
           </div>

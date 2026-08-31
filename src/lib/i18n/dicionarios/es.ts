@@ -8,6 +8,7 @@ export const es: Dicionario = {
   },
 
   common: {
+  privacy: "Privacidad",
     cancel: "Cancelar",
     save: "Guardar",
     saving: "Guardando…",
@@ -71,6 +72,8 @@ export const es: Dicionario = {
       subtitle: "Entra para seguir donde lo dejaste.",
       footer: "Tus libros y tus notas quedan en tu cuenta, en cualquier dispositivo.",
       tabSignIn: "Entrar",
+      google: "Continuar con Google",
+      orEmail: "o con tu correo",
       tabSignUp: "Crear cuenta",
       email: "Correo",
       emailPlaceholder: "tu@ejemplo.com",
@@ -109,6 +112,7 @@ export const es: Dicionario = {
       notConfirmed: "Confirma tu correo antes de entrar.",
       weakPassword: "Contraseña demasiado corta (mínimo 6).",
       rateLimit: "Demasiados intentos. Espera un poco.",
+      providerDisabled: "Entrar con Google todavía no está configurado.",
       rateLimitMinutes: "Demasiados intentos. Espera unos minutos.",
     },
   },
@@ -444,5 +448,7 @@ export const es: Dicionario = {
     ctaBody: "Crea una cuenta, arrastra un PDF dentro y mira cómo queda.",
     ctaButton: "Empezar a leer",
     footerRights: "Hecho para quien escribe en sus propios libros.",
+    support: "Ayúdame a comprar el dominio",
+    supportWhy: "Nekoreader funciona en un plan gratuito y todavía no tiene dominio propio. Si te sirve, puedes echar una mano.",
   },
 };

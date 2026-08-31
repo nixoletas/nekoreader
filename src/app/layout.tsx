@@ -5,6 +5,7 @@ import { SCRIPT_TEMA } from "@/lib/tema";
 import { DialogProvider } from "@/components/dialog-provider";
 import { I18nProvider } from "@/lib/i18n/cliente";
 import { i18nAtual } from "@/lib/i18n/servidor";
+import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const display = Fraunces({
@@ -15,12 +16,28 @@ const display = Fraunces({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { d } = await i18nAtual();
+  const { locale, d } = await i18nAtual();
 
   return {
+    // Sem isto, `og:image` sai com caminho relativo — e caminho relativo num
+    // card de rede social é imagem que não carrega em lugar nenhum.
+    metadataBase: new URL(siteUrl()),
     title: d.landing.metaTitle,
     description: d.landing.metaDescription,
     manifest: "/manifest.webmanifest",
+    // A imagem vem do `opengraph-image.tsx`, que o Next encaixa sozinho aqui.
+    openGraph: {
+      type: "website",
+      siteName: d.brand.name,
+      title: d.landing.metaTitle,
+      description: d.landing.metaDescription,
+      locale,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: d.landing.metaTitle,
+      description: d.landing.metaDescription,
+    },
     icons: {
       // O SVG é o que a aba do navegador usa quando sabe: fica nítido em
       // qualquer densidade, e é o mesmo desenho do ícone instalado.
