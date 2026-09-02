@@ -6,7 +6,10 @@ import { CachePaginas } from "@/lib/pdf-cache";
 import { extrairBlocos } from "@/lib/pdf-text";
 import { obterOcr, salvarOcr } from "@/lib/offline-db";
 import type { Bloco } from "@/lib/pdf-blocos";
-import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
+import LeitorTexto, {
+  revogarBlocos,
+  type DestaqueBusca,
+} from "@/components/leitor-texto";
 import { useI18n } from "@/lib/i18n/cliente";
 import { IDIOMAS_OCR } from "@/lib/i18n/config";
 import { textoDoErro } from "@/lib/erros";
@@ -29,6 +32,7 @@ export default function PdfText({
   onDeleteHighlight,
   onSwipe,
   onModoPagina,
+  destaque,
 }: {
   fileUrl: string;
   /** Identifica o livro pra guardar o que o OCR reconhecer. */
@@ -45,6 +49,8 @@ export default function PdfText({
   onDeleteHighlight: (id: string) => Promise<void>;
   onSwipe: (dir: 1 | -1) => void;
   onModoPagina: () => void;
+  /** Termo que a busca acabou de levar até aqui, e qual ocorrência é a escolhida. */
+  destaque?: DestaqueBusca | null;
 }) {
   const { d, t, locale } = useI18n();
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
@@ -171,6 +177,7 @@ export default function PdfText({
       onDeleteHighlight={onDeleteHighlight}
       onSwipe={onSwipe}
       onModoPagina={onModoPagina}
+      destaque={destaque}
       onOcr={() => void rodarOcr()}
       lendoImagem={lendoImagem}
       textoSemConteudo={d.text.noTextLayer}

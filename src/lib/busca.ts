@@ -17,6 +17,14 @@ import type { Bloco } from "@/lib/pdf-blocos";
 export type Achado = {
   /** Página do arquivo (1 = a primeira). No EPUB é o capítulo. */
   pagina: number;
+  /**
+   * Qual ocorrência desta página é esta, contando do zero.
+   *
+   * É o que deixa o leitor parar no trecho escolhido, e não na primeira vez que
+   * a palavra aparece na página — numa página que repete o termo cinco vezes, a
+   * diferença é entre achar e procurar de novo.
+   */
+  ordem: number;
   /** O que vem antes do trecho casado, com reticências quando foi cortado. */
   antes: string;
   /** O trecho como está escrito no livro — com acento, maiúscula e tudo. */
@@ -234,9 +242,10 @@ export function procurar(
     const texto = paginas[i];
     if (!texto || !contem(texto, alvo)) continue;
 
+    let ordem = 0;
     for (const faixa of acharNoTexto(texto, termo)) {
       if (achados.length >= limite) return { achados, cortado: true };
-      achados.push({ pagina: i + 1, ...trecho(texto, faixa) });
+      achados.push({ pagina: i + 1, ordem: ordem++, ...trecho(texto, faixa) });
     }
   }
 

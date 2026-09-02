@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Bloco, Elo, Faixa } from "@/lib/pdf-blocos";
 import { useSwipe } from "@/lib/swipe";
+import { acharNoTexto, textoDoBloco } from "@/lib/busca";
 import Balao from "@/components/balao";
 import { BarraProgresso, Botao } from "@/components/ui";
 import {
@@ -20,6 +21,12 @@ type Pending = { spans: TextSpan[]; text: string; x: number; y: number; h: numbe
 type Ativa = { highlight: Highlight; x: number; y: number; h: number };
 
 const CORES: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
+/** O trecho que a busca escolheu: o termo, e qual ocorrência da página é ela. */
+export type DestaqueBusca = { termo: string; ordem: number };
+
+/** Uma ocorrência do termo dentro de um bloco. `escolhido` é a que se procurava. */
+type AchadoNoBloco = { inicio: number; fim: number; escolhido: boolean };
 
 /** Quanto a seleção precisa ficar parada antes do balão aparecer, em ms. */
 const ESPERA_SELECAO = 180;
@@ -59,6 +66,7 @@ export default function LeitorTexto({
   onModoPagina,
   onOcr,
   lendoImagem,
+  destaque,
   textoSemConteudo,
 }: {
   /** Identifica o que está na tela (arquivo + página): mudou, o popover fecha. */
@@ -83,6 +91,8 @@ export default function LeitorTexto({
   onOcr?: () => void;
   /** O reconhecimento está rodando — é lento o bastante pra precisar dizer. */
   lendoImagem?: boolean;
+  /** O que a busca acabou de levar até aqui: fica realçado no texto. */
+  destaque?: DestaqueBusca | null;
   textoSemConteudo: string;
 }) {
   const { d, t } = useI18n();
@@ -212,6 +222,15 @@ export default function LeitorTexto({
     window.getSelection()?.removeAllRanges();
     await onAddHighlight(pending.spans, pending.text, color);
   }
+
+  /**
+   * Onde o termo procurado cai em cada bloco, e qual das ocorrências é a que a
+   * pessoa escolheu na lista de resultados.
+   */
+  const achadosPorBloco = useMemo(
+    () => (blocos && destaque ? marcarAchados(blocos, destaque) : null),
+    [blocos, destaque],
+  );
 
   if (erro) {
     return <p className="py-24 text-center text-sm text-red-500">{erro}</p>;
@@ -353,16 +372,13 @@ export default function LeitorTexto({
           );
         }
         const comEstilo = b.tipo === "paragrafo" || b.tipo === "citacao" || b.tipo === "nota";
-        const conteudo = fatiarTexto(
-          b.texto,
-          i,
-          highlights,
-          ativa?.highlight.id ?? null,
-          comEstilo ? b.negrito : [],
-          comEstilo ? b.italico : [],
-          comEstilo ? b.sobrescrito : [],
-          comEstilo ? b.links : [],
-        );
+        const conteudo = fatiarTexto(b.texto, i, highlights, ativa?.highlight.id ?? null, {
+          negrito: comEstilo ? b.negrito : [],
+          italico: comEstilo ? b.italico : [],
+          sobrescrito: comEstilo ? b.sobrescrito : [],
+          links: comEstilo ? b.links : [],
+          busca: achadosPorBloco?.[i] ?? [],
+        });
         if (b.tipo === "codigo") {
           return (
             <pre key={i} data-bloco={i}>
@@ -460,11 +476,16 @@ function fatiarTexto(
   indice: number,
   highlights: Highlight[],
   ativaId: string | null,
-  negrito: Faixa[] = [],
-  italico: Faixa[] = [],
-  sobrescrito: Faixa[] = [],
-  links: Elo[] = [],
+  camadas: {
+    negrito: Faixa[];
+    italico: Faixa[];
+    sobrescrito: Faixa[];
+    links: Elo[];
+    /** Onde o termo procurado aparece neste bloco. */
+    busca: AchadoNoBloco[];
+  },
 ): React.ReactNode {
+  const { negrito, italico, sobrescrito, links, busca } = camadas;
   const dentro = (f: Faixa) => ({
     start: Math.max(0, Math.min(texto.length, f.start)),
     end: Math.max(0, Math.min(texto.length, f.end)),
@@ -486,19 +507,24 @@ function fatiarTexto(
   const enderecos = links
     .map((l) => ({ ...l, ...dentro(l) }))
     .filter((l) => l.start < l.end);
+  // A busca fala em `inicio`/`fim`; aqui tudo é `start`/`end`.
+  const achados = busca
+    .map((f) => ({ ...dentro({ start: f.inicio, end: f.fim }), escolhido: f.escolhido }))
+    .filter((f) => f.start < f.end);
 
   if (
     !trechos.length &&
     !fortes.length &&
     !inclinados.length &&
     !elevados.length &&
-    !enderecos.length
+    !enderecos.length &&
+    !achados.length
   ) {
     return texto;
   }
 
   const pontos = new Set<number>([0, texto.length]);
-  for (const f of [...trechos, ...fortes, ...inclinados, ...elevados, ...enderecos]) {
+  for (const f of [...trechos, ...fortes, ...inclinados, ...elevados, ...enderecos, ...achados]) {
     pontos.add(f.start);
     pontos.add(f.end);
   }
@@ -518,6 +544,24 @@ function fatiarTexto(
     if (inclinados.some(cobre)) conteudo = <em>{conteudo}</em>;
     if (fortes.some(cobre)) conteudo = <strong>{conteudo}</strong>;
     if (elevados.some(cobre)) conteudo = <sup>{conteudo}</sup>;
+
+    // O realce da busca é o de fora entre os de texto: quem veio de um resultado
+    // precisa achar o trecho de relance, mesmo que ele já esteja em negrito ou
+    // dentro de um link. `data-achado` é por onde o leitor sabe até onde rolar.
+    const achado = achados.find(cobre);
+    if (achado) {
+      conteudo = (
+        <mark
+          className="achado"
+          // Só a escolhida leva o atributo: é por ele que o leitor sabe até onde
+          // rolar, e é ele que o CSS usa pra realçá-la mais forte que as outras
+          // ocorrências da mesma página.
+          data-achado={achado.escolhido ? "" : undefined}
+        >
+          {conteudo}
+        </mark>
+      );
+    }
 
     const endereco = enderecos.find(cobre);
     if (endereco) {
@@ -660,4 +704,35 @@ function posicaoDoBalao({ x, y, h }: { x: number; y: number; h: number }) {
     esquerda: `clamp(7.5rem, ${x}px, calc(100% - 7.5rem))`,
     topo: `${acima ? y - 10 : y + h + 10}px`,
   };
+}
+
+/**
+ * As ocorrências do termo em cada bloco, com a escolhida marcada.
+ *
+ * A contagem corre por todos os blocos, na mesma ordem e sobre o mesmo texto que
+ * a busca leu (`textoDoBloco`) — é isso que faz "a terceira ocorrência da página
+ * 72" na lista ser a terceira aqui também. Numa página que repete o termo, parar
+ * sempre na primeira seria mandar a pessoa procurar de novo.
+ */
+function marcarAchados(blocos: Bloco[], destaque: DestaqueBusca): AchadoNoBloco[][] {
+  const porBloco: AchadoNoBloco[][] = [];
+  let vistas = 0;
+
+  for (const b of blocos) {
+    porBloco.push(
+      acharNoTexto(textoDoBloco(b), destaque.termo).map((f) => ({
+        ...f,
+        escolhido: vistas++ === destaque.ordem,
+      })),
+    );
+  }
+
+  // A escolhida ficou fora do alcance (o texto mudou desde a busca — um OCR
+  // rodou, por exemplo): a primeira serve, e é melhor que não parar em nenhuma.
+  if (!porBloco.some((f) => f.some((a) => a.escolhido))) {
+    const primeiro = porBloco.find((f) => f.length);
+    if (primeiro) primeiro[0].escolhido = true;
+  }
+
+  return porBloco;
 }

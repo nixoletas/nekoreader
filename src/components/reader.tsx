@@ -506,6 +506,28 @@ function ReaderCarregado({
     agendarSalvar();
   }, [page, agendarSalvar]);
 
+  /**
+   * Termo que a busca acabou de levar até uma página, e onde.
+   *
+   * Guardar a página junto é o que impede o realce de acompanhar a pessoa pelo
+   * livro inteiro: ele vale só onde ela pediu pra chegar.
+   */
+  const [destaque, setDestaque] = useState<{
+    termo: string;
+    pagina: number;
+    /** Qual ocorrência da página é a escolhida, contando do zero. */
+    ordem: number;
+    nonce: number;
+  } | null>(null);
+  /** A próxima parada é o trecho achado, não a altura em que a página ficou. */
+  const rolarAoAchado = useRef(false);
+
+  // O realce só vale na página a que a busca levou.
+  const destaqueAqui =
+    destaque && destaque.pagina === page
+      ? { termo: destaque.termo, ordem: destaque.ordem }
+      : null;
+
   const irPara = useCallback(
     (p: number) => {
       const max = numPages || p;
@@ -520,6 +542,24 @@ function ReaderCarregado({
   );
 
   /**
+   * Vai pro resultado da busca: abre a página e para no trecho, realçado.
+   *
+   * Cair na página certa e ter que caçar a palavra com o olho é metade do
+   * caminho — o que se procurava tem que estar na tela.
+   */
+  const irParaAchado = useCallback(
+    (p: number, termo: string, ordem: number) => {
+      rolarAoAchado.current = true;
+      // O `nonce` faz a rolagem acontecer de novo quando o resultado escolhido
+      // está na página que já está aberta, em que `irPara` não tem o que fazer.
+      setDestaque({ termo, pagina: p, ordem, nonce: Date.now() });
+      irPara(p);
+      setSheet(null);
+    },
+    [irPara],
+  );
+
+  /**
    * Devolve o leitor à altura em que ele estava naquela página.
    *
    * Não dá pra rolar de imediato: o conteúdo da página nova ainda está sendo montado
@@ -529,8 +569,10 @@ function ReaderCarregado({
    */
   useEffect(() => {
     const destino = aRestaurar.current;
+    const aoAchado = rolarAoAchado.current;
     aRestaurar.current = null;
-    if (destino === null) {
+    rolarAoAchado.current = false;
+    if (destino === null && !aoAchado) {
       restaurando.current = false;
       return;
     }
@@ -543,8 +585,19 @@ function ReaderCarregado({
     let anterior = -1;
     let estaveis = 0;
 
-    const concluir = (topo: number) => {
-      window.scrollTo({ top: topo });
+    /** O trecho que a busca realçou, se ele já estiver na tela. */
+    const achado = () =>
+      aoAchado ? document.querySelector<HTMLElement>("[data-achado]") : null;
+
+    const concluir = (limite: number) => {
+      const teto = Math.max(0, limite);
+      const el = achado();
+      // Um terço da tela acima do trecho: colado no topo ele parece o começo de
+      // um assunto novo, e o que veio antes é o que diz do que ele fala.
+      const topo = el
+        ? window.scrollY + el.getBoundingClientRect().top - window.innerHeight / 3
+        : Math.round((destino ?? 0) * teto);
+      window.scrollTo({ top: Math.max(0, Math.min(topo, teto)) });
       restaurando.current = false;
     };
 
@@ -556,15 +609,20 @@ function ReaderCarregado({
         estaveis = 0;
         anterior = limite;
       }
-      if (estaveis >= 3 || tentativas > 90) {
-        concluir(Math.round(destino * Math.max(0, limite)));
+      // Indo pro achado, a altura parar de mudar não basta: o trecho pode ainda
+      // não ter sido montado. Espera ele aparecer, dentro do mesmo teto de ~1,5s.
+      const pronto = estaveis >= 3 && (!aoAchado || achado());
+      if (pronto || tentativas > 90) {
+        concluir(limite);
         return;
       }
       tentativas++;
       requestAnimationFrame(tentar);
     };
 
-    if (destino <= 0) {
+    // Voltar pro topo é imediato — mas não quando o alvo é um trecho, que
+    // precisa existir antes.
+    if (!aoAchado && destino !== null && destino <= 0) {
       concluir(0);
     } else {
       tentar();
@@ -574,7 +632,9 @@ function ReaderCarregado({
       cancelado = true;
       restaurando.current = false;
     };
-  }, [page]);
+    // `destaque?.nonce` entra pra que escolher um resultado da página que já
+    // está aberta também role até ele.
+  }, [page, destaque?.nonce]);
 
   /**
    * "Você parou na página 87 no iPhone — continuar de lá?"
@@ -798,6 +858,7 @@ function ReaderCarregado({
         irPara(p);
         setSheet(null);
       }}
+      onIrAoAchado={irParaAchado}
       onDelHighlight={delHighlight}
       onRenomear={renomearHighlight}
       onAnotar={anotarHighlight}
@@ -1026,6 +1087,7 @@ function ReaderCarregado({
                   onAddHighlight={addHighlightTexto}
                   onDeleteHighlight={delHighlight}
                   onSwipe={(dir) => irPara(page + dir)}
+                  destaque={destaqueAqui}
                 />
               ) : modo === "pagina" ? (
                 <PdfCanvas
@@ -1050,6 +1112,7 @@ function ReaderCarregado({
                   onDeleteHighlight={delHighlight}
                   onSwipe={(dir) => irPara(page + dir)}
                   onModoPagina={() => mudarModo("pagina")}
+                  destaque={destaqueAqui}
                 />
               )}
               <p className="mt-5 text-center text-xs text-muted">
@@ -1367,6 +1430,7 @@ function Painel({
   eEpub,
   numero,
   onIr,
+  onIrAoAchado,
   onDelHighlight,
   onRenomear,
   onAnotar,
@@ -1387,6 +1451,8 @@ function Painel({
   /** Página do arquivo → número como o livro imprime ("17" → "3", "5" → "v"). */
   numero: (p: number) => string;
   onIr: (p: number) => void;
+  /** Vai pro resultado da busca: abre a página e para no trecho, realçado. */
+  onIrAoAchado: (p: number, termo: string, ordem: number) => void;
   onDelHighlight: (id: string) => void;
   onRenomear: (id: string) => void;
   onAnotar: (id: string) => void;
@@ -1443,7 +1509,7 @@ function Painel({
             setTermo={setTermoBusca}
             eEpub={eEpub}
             numero={numero}
-            onIr={onIr}
+            onIr={onIrAoAchado}
           />
         ) : aba === "sumario" ? (
           <Sumario estado={sumario} pagina={pagina} numero={numero} onIr={onIr} />
@@ -1849,7 +1915,8 @@ function Busca({
   eEpub: boolean;
   /** Página do arquivo → número como o livro imprime. */
   numero: (p: number) => string;
-  onIr: (p: number) => void;
+  /** Abre a página e para no trecho, realçado — não só na página. */
+  onIr: (p: number, termo: string, ordem: number) => void;
 }) {
   const { d, t, p } = useI18n();
   const { achados, cortado, progresso, carregando, semTexto, erro } = estado;
@@ -1900,7 +1967,7 @@ function Busca({
           {achados.map((a, i) => (
             <li key={`${a.pagina}-${i}`}>
               <button
-                onClick={() => onIr(a.pagina)}
+                onClick={() => onIr(a.pagina, a.casado, a.ordem)}
                 className="block w-full px-3 py-2.5 text-left transition active:bg-background"
               >
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">

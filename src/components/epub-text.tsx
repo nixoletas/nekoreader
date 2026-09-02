@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { CachePaginas } from "@/lib/pdf-cache";
 import { abrirEpubDaUrl, blocosDoEpub } from "@/lib/epub-doc";
 import type { Bloco } from "@/lib/pdf-blocos";
-import LeitorTexto, { revogarBlocos } from "@/components/leitor-texto";
+import LeitorTexto, {
+  revogarBlocos,
+  type DestaqueBusca,
+} from "@/components/leitor-texto";
 import { useI18n } from "@/lib/i18n/cliente";
 import { textoDoErro } from "@/lib/erros";
 import type { Highlight, HighlightColor, TextSpan } from "@/lib/types";
@@ -27,6 +30,7 @@ export default function EpubText({
   onAddHighlight,
   onDeleteHighlight,
   onSwipe,
+  destaque,
 }: {
   fileUrl: string;
   /** Número do capítulo, 1 em diante. */
@@ -41,6 +45,8 @@ export default function EpubText({
   ) => Promise<void>;
   onDeleteHighlight: (id: string) => Promise<void>;
   onSwipe: (dir: 1 | -1) => void;
+  /** Termo que a busca acabou de levar até aqui, e qual ocorrência é a escolhida. */
+  destaque?: DestaqueBusca | null;
 }) {
   const { d, t } = useI18n();
   const [blocos, setBlocos] = useState<Bloco[] | null>(null);
@@ -108,6 +114,7 @@ export default function EpubText({
       onAddHighlight={onAddHighlight}
       onDeleteHighlight={onDeleteHighlight}
       onSwipe={onSwipe}
+      destaque={destaque}
       textoSemConteudo={d.text.emptyChapter}
     />
   );
