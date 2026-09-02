@@ -389,6 +389,23 @@ body {
   color: var(--ink);
 }
 
+/* ---------- trecho achado pela busca ---------- */
+/* A escolhida na lista é a que a rolagem procura, e por isso é a que grita: as
+   outras ocorrências da mesma página ficam num tom mais fraco, só pra dizer que
+   estão ali. Some sozinho quando a pessoa vai pra outra página. */
+
+.leitura .achado {
+  color: inherit;
+  border-radius: 2px;
+  padding: 0.05em 0;
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+.leitura .achado[data-achado] {
+  background: color-mix(in srgb, var(--gold) 55%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
 /* ---------- balão de ações da seleção ---------- */
 /* No celular ele mora acima da barra de navegação, longe da seleção: por cima
    dela ele cobriria as alças que a pessoa usa pra esticar o trecho. Na tela
