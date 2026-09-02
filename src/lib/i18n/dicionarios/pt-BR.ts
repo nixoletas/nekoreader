@@ -36,13 +36,10 @@ export const ptBR: Dicionario = {
 
   theme: {
     label: "Tema",
-    system: "Aparelho",
     light: "Claro",
     dark: "Escuro",
-    systemLong: "Tema do aparelho",
     lightLong: "Tema claro",
     darkLong: "Tema escuro",
-    systemLower: "tema do aparelho",
     lightLower: "tema claro",
     darkLower: "tema escuro",
     hint: "{current} · tocar para {next}",

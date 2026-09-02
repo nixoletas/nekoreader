@@ -53,16 +53,19 @@
    Assim a escolha manual e a do sistema passam pelo mesmo caminho, e a pessoa pode
    trocar de tema no meio da leitura sem que o sistema a contradiga. */
 :root[data-tema="escuro"] {
-  --paper: #15120e;
-  --surface: #1e1a15;
-  --line: #322a21;
+  /* Preto de verdade: em tela OLED o pixel apagado não acende, e é o que faz o
+     escuro descansar a vista à noite. A folha fica um fio acima do preto só pra
+     ainda se distinguir do fundo — sem isso o texto flutua no vazio. */
+  --paper: #000000;
+  --surface: #0a0908;
+  --line: #262019;
   --ink: #ece2d0;
   --ink-soft: #9d9285;
   --accent: #e08a63;
   --accent-soft: #c8734f;
   --gold: #d8ab4e;
-  --grain: rgba(255, 250, 240, 0.028);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px -14px rgba(0, 0, 0, 0.8);
+  --grain: rgba(255, 250, 240, 0.02);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 10px 30px -14px rgba(0, 0, 0, 0.9);
   color-scheme: dark;
 }
 

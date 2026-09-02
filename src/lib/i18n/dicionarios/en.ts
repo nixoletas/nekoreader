@@ -44,13 +44,10 @@ export const en = {
 
   theme: {
     label: "Theme",
-    system: "Device",
     light: "Light",
     dark: "Dark",
-    systemLong: "Device theme",
     lightLong: "Light theme",
     darkLong: "Dark theme",
-    systemLower: "device theme",
     lightLower: "light theme",
     darkLower: "dark theme",
     /** "Light theme · tap for dark theme" */
