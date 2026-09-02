@@ -17,7 +17,6 @@ import {
   LayoutGrid,
   List,
   Minus,
-  MonitorCog,
   Moon,
   Pencil,
   Plus,
@@ -1245,32 +1244,37 @@ function ReaderCarregado({
                       d={d}
                       className="w-full [&_button]:!min-h-12"
                     />
-                    {modo === "texto" && (
-                      <Botao
-                        variante="contorno"
-                        onClick={() => {
-                          setConferindo(true);
-                          setSheet(null);
-                        }}
-                        className="mt-2 w-full"
-                      >
-                        <Eye className="h-4 w-4" aria-hidden />
-                        {d.reader.checkOriginal}
-                      </Botao>
-                    )}
+                  </div>
+                )}
+
+                {/* Buscar e exportar lado a lado: são as duas coisas que se faz
+                    com o livro inteiro, e empilhadas custavam meia tela. */}
+                <div className={eEpub ? "grid gap-2" : "grid grid-cols-2 gap-2"}>
+                  <Botao
+                    variante="contorno"
+                    onClick={() => {
+                      setAba("busca");
+                      setSheet("painel");
+                    }}
+                    className="w-full"
+                  >
+                    <Search className="h-4 w-4 shrink-0" aria-hidden />
+                    {d.panel.tabSearch}
+                  </Botao>
+                  {!eEpub && (
                     <Botao
                       variante="contorno"
                       onClick={() => {
                         setExportando(true);
                         setSheet(null);
                       }}
-                      className="mt-2 w-full"
+                      className="w-full"
                     >
-                      <Download className="h-4 w-4" aria-hidden />
+                      <Download className="h-4 w-4 shrink-0" aria-hidden />
                       {d.reader.exportBook}
                     </Botao>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {modo === "pagina" ? (
                   <div>
@@ -1736,7 +1740,6 @@ function SeletorTema({ d }: { d: Dicionario }) {
     >
       {(
         [
-          ["sistema", d.theme.system, MonitorCog],
           ["claro", d.theme.light, Sun],
           ["escuro", d.theme.dark, Moon],
         ] as [Tema, string, typeof Sun][]

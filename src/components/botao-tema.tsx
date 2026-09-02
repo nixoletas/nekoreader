@@ -1,20 +1,12 @@
 "use client";
 
-import { Moon, MonitorCog, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTema, type Tema } from "@/lib/tema";
 import { useI18n } from "@/lib/i18n/cliente";
 import type { Dicionario } from "@/lib/i18n/dicionarios";
 
-const CICLO: Tema[] = ["sistema", "claro", "escuro"];
-
-const ICONE = {
-  sistema: MonitorCog,
-  claro: Sun,
-  escuro: Moon,
-} as const;
-
 function rotulo(d: Dicionario, t: Tema): string {
-  return t === "claro" ? d.theme.lightLong : t === "escuro" ? d.theme.darkLong : d.theme.systemLong;
+  return t === "claro" ? d.theme.lightLong : d.theme.darkLong;
 }
 
 /**
@@ -24,20 +16,17 @@ function rotulo(d: Dicionario, t: Tema): string {
  * "helles Design", com o substantivo intacto — `toLowerCase()` estragaria.
  */
 function rotuloNaFrase(d: Dicionario, t: Tema): string {
-  return t === "claro" ? d.theme.lightLower : t === "escuro" ? d.theme.darkLower : d.theme.systemLower;
+  return t === "claro" ? d.theme.lightLower : d.theme.darkLower;
 }
 
-/**
- * Troca o tema num toque só, girando entre aparelho → claro → escuro.
- *
- * O rótulo diz pra onde o próximo toque leva, que é a única forma de um botão de
- * três estados não virar adivinhação.
- */
+/** Interruptor de dois estados: o ícone mostra pra onde o toque leva. */
 export default function BotaoTema({ className = "" }: { className?: string }) {
   const { tema, definir } = useTema();
   const { d, t } = useI18n();
-  const proximo = CICLO[(CICLO.indexOf(tema) + 1) % CICLO.length];
-  const Icone = ICONE[tema];
+  const proximo: Tema = tema === "escuro" ? "claro" : "escuro";
+  // O ícone é o do destino, não o do estado atual: num interruptor de dois
+  // estados é o destino que a pessoa procura.
+  const Icone = proximo === "escuro" ? Moon : Sun;
 
   const atual = rotulo(d, tema);
   const seguinte = rotuloNaFrase(d, proximo);

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces } from "next/font/google";
 import SwRegister from "@/components/sw-register";
+import CorDaBarra from "@/components/cor-da-barra";
 import { SCRIPT_TEMA } from "@/lib/tema";
 import { DialogProvider } from "@/components/dialog-provider";
 import { I18nProvider } from "@/lib/i18n/cliente";
@@ -82,6 +83,7 @@ export default async function RootLayout({
         <I18nProvider locale={locale} dicionario={d}>
           <DialogProvider>{children}</DialogProvider>
         </I18nProvider>
+        <CorDaBarra />
         <SwRegister />
       </body>
     </html>
